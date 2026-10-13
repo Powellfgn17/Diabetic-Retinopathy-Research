@@ -71,6 +71,7 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 > Le dossier `Donnees/` n'est pas versionné dans git (archives trop volumineuses pour GitHub). Téléchargez les jeux de données depuis leurs sources officielles et placez-les localement :
 > - FIRE : [projects.ics.forth.gr/cvrl/fire](https://projects.ics.forth.gr/cvrl/fire)
 > - IDRiD : [idrid.grand-challenge.org](https://idrid.grand-challenge.org)
+> - Drive : [fire&idrid](https://drive.google.com/drive/folders/1zZWHoVnSXPMCaV4NuxjkuvBCyWTkmIzn?usp=sharing)
 
 ## Valorisation
 
