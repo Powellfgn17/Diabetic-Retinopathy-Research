@@ -1,0 +1,6 @@
+{
+  "masqueChampVision": { "seuil": 0.08 },
+  "correctionEclairage": { "rayonFond": 50 },
+  "rehaussementContraste": { "methode": "clahe", "tailleBloc": 127, "pente": 3.0 },
+  "filtreMedian": { "rayon": 2 }
+}

@@ -1,0 +1,112 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.scijava</groupId>
+    <artifactId>pom-scijava</artifactId>
+    <version>45.1.0</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>bj.epac.retine</groupId>
+  <artifactId>retine</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <packaging>pom</packaging>
+
+  <name>Retinopathie Diabetique</name>
+  <description>Recalage et suivi d'images de fond d'oeil pour la retinopathie diabetique, plugin Fiji sans IA.</description>
+  <url>https://github.com/Powellfgn17/Diabetic-Retinopathy-Research</url>
+  <inceptionYear>2026</inceptionYear>
+  <organization>
+    <name>EPAC</name>
+  </organization>
+  <licenses>
+    <license>
+      <name>All rights reserved</name>
+      <distribution>manual</distribution>
+    </license>
+  </licenses>
+
+  <developers>
+    <developer>
+      <id>Powellfgn17</id>
+      <name>Powell Fagnon</name>
+      <roles>
+        <role>lead</role>
+        <role>developer</role>
+      </roles>
+    </developer>
+  </developers>
+  <contributors>
+    <contributor>
+      <name>None</name>
+    </contributor>
+  </contributors>
+
+  <mailingLists>
+    <mailingList>
+      <name>None</name>
+    </mailingList>
+  </mailingLists>
+
+  <scm>
+    <connection>scm:git:https://github.com/Powellfgn17/Diabetic-Retinopathy-Research</connection>
+    <developerConnection>scm:git:git@github.com:Powellfgn17/Diabetic-Retinopathy-Research</developerConnection>
+    <tag>HEAD</tag>
+    <url>https://github.com/Powellfgn17/Diabetic-Retinopathy-Research</url>
+  </scm>
+  <issueManagement>
+    <system>GitHub Issues</system>
+    <url>https://github.com/Powellfgn17/Diabetic-Retinopathy-Research/issues</url>
+  </issueManagement>
+  <ciManagement>
+    <system>None</system>
+  </ciManagement>
+
+  <properties>
+    <license.licenseName>N/A</license.licenseName>
+    <license.copyrightOwners>Powell Fagnon</license.copyrightOwners>
+  </properties>
+
+  <modules>
+    <module>retine-noyau</module>
+    <module>retine-plugin</module>
+  </modules>
+
+  <build>
+    <plugins>
+      <!--
+      pom-scijava vérifie les métadonnées module par module, sans tenir
+      compte de l'héritage. Elles sont déclarées ici une seule fois ; les
+      modules n'ont qu'à porter un <name>.
+      -->
+      <plugin>
+        <artifactId>maven-enforcer-plugin</artifactId>
+        <executions>
+          <execution>
+            <id>enforce-rules</id>
+            <configuration>
+              <rules>
+                <requireElements implementation="org.scijava.maven.plugin.enforcer.RequireElements">
+                  <elements combine.self="override">
+                    <element>name</element>
+                  </elements>
+                </requireElements>
+              </rules>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+    </plugins>
+  </build>
+
+  <repositories>
+    <repository>
+      <id>scijava.public</id>
+      <url>https://maven.scijava.org/content/groups/public</url>
+    </repository>
+  </repositories>
+</project>

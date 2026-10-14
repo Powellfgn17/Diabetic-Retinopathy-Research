@@ -53,7 +53,7 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 
 ## Outils
 
-- **Développement :** Java, ImageJ/Fiji, Eclipse, Jama (algèbre linéaire), JFreeChart (courbes).
+- **Développement :** Java, Maven, ImageJ/Fiji, Eclipse ou IntelliJ, Jama (algèbre linéaire), JFreeChart (courbes).
 - **Données :** FIRE, IDRiD ou e-ophtha.
 - **Collaboration :** Git/GitHub.
 - **Rédaction :** LaTeX (Overleaf) ou Word, selon le modèle de la conférence CIITA.
@@ -62,16 +62,70 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 
 ```
 .
-├── Docs/      Documents de cadrage du projet (problématique, plan de travail)
-└── Donnees/   Jeux de données publics (non versionnés, voir ci-dessous)
-    ├── FIRE/  Fundus Image Registration Dataset (recalage, 134 paires)
-    └── IDRiD/ Jeu annoté pour la segmentation des lésions
+├── pom.xml          POM parent Maven (hérite de pom-scijava)
+├── config/          Paramètres de la chaîne (defaut.json)
+├── retine-noyau/    Algorithmes en Java pur, sans dépendance à ImageJ
+├── retine-plugin/   Plugin Fiji : adaptateur ImageJ et commandes de menu
+├── resultats/       Tableaux et résultats d'évaluation
+├── Docs/            Documents de cadrage du projet (problématique, plan de travail)
+└── Donnees/         Jeux de données publics (non versionnés, voir ci-dessous)
+    ├── FIRE/        Fundus Image Registration Dataset (recalage, 134 paires)
+    └── IDRiD/       Jeu annoté pour la segmentation des lésions
 ```
 
 > Le dossier `Donnees/` n'est pas versionné dans git (archives trop volumineuses pour GitHub). Téléchargez les jeux de données depuis leurs sources officielles et placez-les localement :
 > - FIRE : [projects.ics.forth.gr/cvrl/fire](https://projects.ics.forth.gr/cvrl/fire)
 > - IDRiD : [idrid.grand-challenge.org](https://idrid.grand-challenge.org)
 > - Drive : [fire&idrid](https://drive.google.com/drive/folders/1zZWHoVnSXPMCaV4NuxjkuvBCyWTkmIzn?usp=sharing)
+>
+> Une fois l'archive FIRE extraite, les images se trouvent dans `Donnees/FIRE/FIRE/FIRE/` (sous-dossiers `Images/`, `Ground Truth/`, `Masks/`).
+
+## Compilation et exécution
+
+### Prérequis
+
+- **JDK 11 ou plus récent** (`java -version`).
+- **Maven 3.8 ou plus récent** (`mvn -v`). Si Maven n'est pas installé, celui livré avec IntelliJ fonctionne :
+  `"C:\Program Files\JetBrains\IntelliJ IDEA <version>\plugins\maven\lib\maven3\bin\mvn.cmd"`
+- **Fiji** ([fiji.sc](https://fiji.sc)) pour lancer le plugin.
+
+### Compiler
+
+Depuis la racine du dépôt :
+
+```bash
+mvn package
+```
+
+Le premier build télécharge les dépendances SciJava et peut prendre plusieurs minutes ; s'il semble bloqué sans aucun téléchargement, l'interrompre et le relancer. Le build exécute aussi les tests et produit :
+
+- `retine-noyau/target/retine-noyau-0.1.0-SNAPSHOT.jar`
+- `retine-plugin/target/retine-plugin-0.1.0-SNAPSHOT.jar`
+
+Commandes utiles :
+
+| Commande | Effet |
+| --- | --- |
+| `mvn test` | Compile et exécute les tests unitaires seulement |
+| `mvn package -DskipTests` | Produit les jars sans lancer les tests |
+| `mvn clean package` | Repart de zéro (supprime les dossiers `target/`) |
+| `mvn -pl retine-noyau test` | Ne teste que le module noyau |
+
+### Installer et lancer le plugin dans Fiji
+
+1. Fermer Fiji.
+2. Copier **les deux jars** dans le dossier de Fiji :
+   - `retine-plugin-0.1.0-SNAPSHOT.jar` dans `Fiji.app/plugins/`
+   - `retine-noyau-0.1.0-SNAPSHOT.jar` dans `Fiji.app/jars/`
+3. Relancer Fiji : la commande apparaît dans **Plugins › RDR › Pretraitement**.
+
+Après chaque modification du code : `mvn package`, recopier les jars, redémarrer Fiji.
+
+> Jama n'est pas livré avec Fiji. Dès que le code l'utilise (à partir du Point 3), copier aussi `jama-1.0.3.jar` (dans `~/.m2/repository/gov/nist/math/jama/1.0.3/`) dans `Fiji.app/jars/`.
+
+### Paramètres
+
+Les réglages du prétraitement sont dans [`config/defaut.json`](config/defaut.json). Pour essayer d'autres valeurs, copier ce fichier plutôt que de le modifier. Les sorties d'exécution vont dans `executions/`, non versionné.
 
 ## Valorisation
 

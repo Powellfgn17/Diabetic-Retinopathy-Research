@@ -1,2 +1,10 @@
 # Jeux de données (trop volumineux pour git ; voir README pour les sources)
 Donnees/
+
+# Build Maven et sorties d'exécution
+target/
+executions/
+
+# Build Maven et sorties d execution
+target/
+executions/
