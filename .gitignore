@@ -8,3 +8,7 @@ executions/
 # Build Maven et sorties d execution
 target/
 executions/
+
+Docs/brief-claude-code-p1.md
+Docs/brief-claude-code-p1-suite.md
+Docs/brief-claude-code-p1-verif.md
