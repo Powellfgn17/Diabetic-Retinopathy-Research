@@ -90,6 +90,24 @@ public final class Masque {
 	}
 
 	/**
+	 * Masque quelconque portant une métadonnée de cercle (centre et rayon équivalents),
+	 * sans copie : <b>cède la propriété</b> du tableau. Convention de D1 : le centre du
+	 * pixel (x, y) est en (x + 0.5, y + 0.5), et (cx, cy) s'exprime dans cette convention.
+	 *
+	 * @param valeurs valeurs ; propriété transférée
+	 * @param largeur largeur en pixels, strictement positive
+	 * @param hauteur hauteur en pixels, strictement positive
+	 * @param cx      abscisse du centre
+	 * @param cy      ordonnée du centre
+	 * @param rayon   rayon équivalent, en pixels
+	 * @return le masque avec métadonnée de cercle
+	 */
+	public static Masque enveloppeAvecCercle(boolean[] valeurs, int largeur, int hauteur,
+			double cx, double cy, double rayon) {
+		return new Masque(valeurs, largeur, hauteur, false, true, cx, cy, rayon);
+	}
+
+	/**
 	 * @param largeur largeur en pixels, strictement positive
 	 * @param hauteur hauteur en pixels, strictement positive
 	 * @return un masque dont tous les pixels sont actifs
