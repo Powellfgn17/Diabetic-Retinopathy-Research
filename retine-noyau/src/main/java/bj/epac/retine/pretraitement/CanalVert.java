@@ -2,7 +2,7 @@ package bj.epac.retine.pretraitement;
 
 import bj.epac.retine.chaine.ContexteExecution;
 import bj.epac.retine.chaine.Etape;
-import bj.epac.retine.image.ImageGris;
+import bj.epac.retine.noyau.image.ImageGris;
 
 /**
  * Extrait le canal vert d'une image couleur.

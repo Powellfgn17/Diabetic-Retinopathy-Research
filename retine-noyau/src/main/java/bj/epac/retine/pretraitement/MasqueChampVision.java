@@ -2,8 +2,8 @@ package bj.epac.retine.pretraitement;
 
 import bj.epac.retine.chaine.ContexteExecution;
 import bj.epac.retine.chaine.Etape;
-import bj.epac.retine.image.ImageGris;
-import bj.epac.retine.image.Masque;
+import bj.epac.retine.noyau.image.ImageGris;
+import bj.epac.retine.noyau.image.Masque;
 
 /**
  * Seuille le fond noir et rend le masque du disque rétinien.
