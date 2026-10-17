@@ -1,6 +1,6 @@
 {
-  "masqueChampVision": { "seuil": 0.08 },
-  "correctionEclairage": { "rayonFond": 50 },
-  "rehaussementContraste": { "methode": "clahe", "tailleBloc": 127, "pente": 3.0 },
+  "masqueChampVision": { "seuil": 0.08, "erosion": 7 },
+  "correctionEclairage": { "sigmaRelatif": 0.05 },
+  "rehaussementContraste": { "percentileBas": 1.0, "percentileHaut": 99.0 },
   "filtreMedian": { "rayon": 2 }
 }
