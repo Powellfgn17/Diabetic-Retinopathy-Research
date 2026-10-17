@@ -12,6 +12,9 @@ public class MasqueTest {
 	public void cercleCentreDedansCoinDehors() {
 		Masque m = Masque.cercle(200, 200, 100, 100, 80);
 		assertTrue(m.estDans(100, 100));
+		// centre du pixel en x+0.5 : (19.5, 100.5) est à 80.5 > 80 du centre, (20.5, 100.5) à 79.5
+		assertFalse(m.estDans(19, 100));
+		assertTrue(m.estDans(20, 100));
 		assertFalse(m.estDans(0, 0));
 		assertTrue(m.aMetadonneeCercle());
 		assertEquals(80.0, m.rayon(), 0.0);

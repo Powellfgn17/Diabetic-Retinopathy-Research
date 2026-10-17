@@ -6,6 +6,7 @@ import bj.epac.retine.noyau.image.Masque;
 import ij.ImagePlus;
 import ij.process.ByteProcessor;
 import ij.process.ColorProcessor;
+import ij.process.FloatProcessor;
 import ij.process.ImageProcessor;
 
 /**
@@ -13,8 +14,7 @@ import ij.process.ImageProcessor;
  * méthodologique. Entrée : division par 255 (8 bits) ou 65535 (16 bits).
  * Sortie : multiplication par 255, arrondi, bornage dans [0,255].
  *
- * <p>Cas non pris en charge, volontairement rejetés (décision à trancher par
- * le projet) : images 32 bits, images indexées, piles de plusieurs tranches.</p>
+ * <p>Cas rejetés : images indexées, piles de plusieurs tranches.</p>
  */
 public final class AdaptateurImageJ {
 
@@ -49,12 +49,13 @@ public final class AdaptateurImageJ {
 	}
 
 	/**
-	 * Convertit une image 8 ou 16 bits d'ImageJ en {@link ImageGris} normalisée.
+	 * Convertit une image 8, 16 ou 32 bits d'ImageJ en {@link ImageGris}.
+	 * 8 et 16 bits sont normalisés par 255 et 65535 ; le 32 bits est recopié tel quel.
 	 *
-	 * @param imp image 8 ou 16 bits, à une seule tranche
-	 * @return l'image en niveaux de gris, valeurs dans [0,1]
+	 * @param imp image 8, 16 ou 32 bits, à une seule tranche
+	 * @return l'image en niveaux de gris
 	 * @throws IllegalArgumentException si l'image est RGB (utiliser {@link #versCouleur}, la
-	 *                                  fusion des canaux étant une décision du noyau), 32 bits,
+	 *                                  fusion des canaux étant une décision du noyau),
 	 *                                  indexée, ou a plusieurs tranches
 	 */
 	public static ImageGris versGris(ImagePlus imp) {
@@ -64,17 +65,24 @@ public final class AdaptateurImageJ {
 			throw new IllegalArgumentException("versGris refuse une image RGB : utiliser versCouleur(), "
 					+ "le choix du canal (vert) appartient au noyau, pas à l'adaptateur.");
 		}
-		if (type != ImagePlus.GRAY8 && type != ImagePlus.GRAY16) {
-			throw new IllegalArgumentException(
-					"versGris prend en charge les images 8 et 16 bits, reçu : " + nomType(imp) + ".");
+		if (type != ImagePlus.GRAY8 && type != ImagePlus.GRAY16 && type != ImagePlus.GRAY32) {
+			throw new IllegalArgumentException("versGris prend en charge les images 8, 16 et 32 bits, reçu : "
+					+ nomType(imp) + ".");
 		}
 		int l = imp.getWidth();
 		int h = imp.getHeight();
 		ImageProcessor ip = imp.getProcessor();
-		float echelle = type == ImagePlus.GRAY8 ? 255f : 65535f;
 		float[] pixels = new float[l * h];
-		for (int i = 0; i < pixels.length; i++) {
-			pixels[i] = ip.get(i) / echelle;
+		if (type == ImagePlus.GRAY32) {
+			// Valeurs déjà flottantes, aucune normalisation (peuvent sortir de [0,1]).
+			for (int i = 0; i < pixels.length; i++) {
+				pixels[i] = ip.getf(i);
+			}
+		} else {
+			float echelle = type == ImagePlus.GRAY8 ? 255f : 65535f;
+			for (int i = 0; i < pixels.length; i++) {
+				pixels[i] = ip.get(i) / echelle;
+			}
 		}
 		return ImageGris.enveloppe(pixels, l, h);
 	}
@@ -88,6 +96,18 @@ public final class AdaptateurImageJ {
 	 */
 	public static ImagePlus versImagePlus(ImageGris img, String titre) {
 		return new ImagePlus(titre, new ByteProcessor(img.largeur(), img.hauteur(), versOctets(img.donneesBrutes())));
+	}
+
+	/**
+	 * Écrit une image en 32 bits flottants, sans quantification : à utiliser pour
+	 * les intermédiaires dont les valeurs sortent de [0,1] ou ne sont pas entières.
+	 *
+	 * @param img   image source
+	 * @param titre titre de l'{@link ImagePlus}
+	 * @return une image 32 bits
+	 */
+	public static ImagePlus versImagePlus32bits(ImageGris img, String titre) {
+		return new ImagePlus(titre, new FloatProcessor(img.largeur(), img.hauteur(), img.donneesBrutes().clone()));
 	}
 
 	/**

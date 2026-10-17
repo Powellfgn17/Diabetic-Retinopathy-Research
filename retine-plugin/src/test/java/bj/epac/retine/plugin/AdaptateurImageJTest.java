@@ -78,4 +78,13 @@ public class AdaptateurImageJTest {
 		byte[] p = (byte[]) AdaptateurImageJ.versImagePlus(g, "r").getProcessor().getPixels();
 		assertArrayEquals(new byte[] { 0, (byte) 255, (byte) 128, (byte) 255 }, p);
 	}
+
+	@Test
+	public void flottant32bitsAllerRetourSansQuantification() {
+		float[] d = { -0.25f, 0.123456f, 1.5f, 0.3333333f };
+		ImageGris g = new ImageGris(d, 2, 2);
+		ImagePlus imp = AdaptateurImageJ.versImagePlus32bits(g, "f");
+		assertArrayEquals(d, (float[]) imp.getProcessor().getPixels(), 0f);
+		assertArrayEquals(d, AdaptateurImageJ.versGris(imp).donneesBrutes(), 0f);
+	}
 }

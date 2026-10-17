@@ -61,8 +61,10 @@ public final class Masque {
 	}
 
 	/**
-	 * Masque circulaire (champ de vue). Un pixel (x, y) est actif si son centre
-	 * est à distance ≤ rayon de (cx, cy). Le cercle est conservé en métadonnée.
+	 * Masque circulaire (champ de vue). Convention : le centre du pixel (x, y)
+	 * est en (x + 0.5, y + 0.5) ; le pixel est actif si
+	 * (x+0.5-cx)² + (y+0.5-cy)² ≤ rayon². Le cercle (cx, cy, rayon, dans cette
+	 * même convention) est conservé en métadonnée.
 	 *
 	 * @param largeur largeur en pixels, strictement positive
 	 * @param hauteur hauteur en pixels, strictement positive
@@ -78,9 +80,9 @@ public final class Masque {
 		boolean[] v = new boolean[largeur * hauteur];
 		double r2 = rayon * rayon;
 		for (int y = 0; y < hauteur; y++) {
-			double dy = y - cy;
+			double dy = y + 0.5 - cy;
 			for (int x = 0; x < largeur; x++) {
-				double dx = x - cx;
+				double dx = x + 0.5 - cx;
 				v[y * largeur + x] = dx * dx + dy * dy <= r2;
 			}
 		}
