@@ -58,6 +58,46 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 - **Collaboration :** Git/GitHub.
 - **Rédaction :** LaTeX (Overleaf) ou Word, selon le modèle de la conférence CIITA.
 
+## Par où commencer (nouveau contributeur)
+
+1. **Comprendre le sujet :** lire les sections *Contexte* à *Méthodologie* ci-dessus, puis `Docs/Projet_Retinopathie_Diabetique.pdf` (problématique) et `Docs/Plan_de_travail_Retinopathie_sans_IA.pdf` (découpage en points). `Docs/Revue_bibliographique_retinopathie (1).docx` résume l'état de l'art.
+2. **Comprendre les choix techniques :** lire [`Docs/decisions.md`](Docs/decisions.md) (conventions de coordonnées, format 32 bits, etc.). Ces décisions s'appliquent à tout le code.
+3. **Récupérer le code et les données :**
+   ```bash
+   git clone https://github.com/Powellfgn17/Diabetic-Retinopathy-Research.git
+   cd Diabetic-Retinopathy-Research
+   ```
+   puis télécharger les jeux de données (voir *Structure du dépôt*).
+4. **Compiler et tester :** `mvn package` (voir *Compilation et exécution*).
+5. **Voir le résultat :** installer le plugin dans Fiji et lancer **Plugins › RDR › Pretraitement** sur une image FIRE.
+
+## Avancement
+
+| Étape de la chaîne | Module | État |
+| --- | --- | --- |
+| Prétraitement (canal vert, masque, éclairage, contraste, médian) | `retine-noyau` / `pretraitement` | Fait, testé, commande Fiji disponible |
+| Segmentation des vaisseaux, bifurcations | — | À faire |
+| Descripteurs de Zernike, appariement | — | À faire |
+| RANSAC, transformation, interpolation | — | À faire |
+| Détection des changements | — | À faire |
+| Évaluation (RMSE FIRE, ROC/EER, robustesse) | `resultats/` | À faire |
+
+## Architecture du code
+
+Le code est séparé en deux modules Maven pour que les algorithmes restent testables sans ImageJ :
+
+- **`retine-noyau`** : Java pur. Aucune dépendance à ImageJ.
+  - `noyau/image/` : types de base (`ImageGris`, `ImageCouleur`, `Masque`, `ImageMasquee`).
+  - `pretraitement/` : une classe par étape (`CanalVert`, `MasqueChampVision`, `CorrectionEclairage`, `RehaussementContraste`, `FiltreMedian`) assemblées par `ChainePretraitement`.
+  - `chaine/` : interface `Etape` et `ContexteExecution` communs à toutes les étapes.
+  - `parametres/` : lecture de `config/defaut.json`.
+  - `jeux/` : accès aux données (`JeuFire`, `PaireImages`).
+- **`retine-plugin`** : colle avec Fiji. `AdaptateurImageJ` convertit `ImagePlus` ↔ types du noyau ; `RDR_Pretraitement` est la commande de menu (déclarée dans `plugins.config`).
+
+Règle : toute logique algorithmique va dans `retine-noyau` ; `retine-plugin` ne fait que de l'adaptation et de l'interface.
+
+**Ajouter une étape :** créer une classe implémentant `Etape` dans le noyau, l'ajouter à la chaîne, ses paramètres dans `config/defaut.json` et `Parametres`, écrire un test dans `src/test`, puis l'exposer dans le plugin si besoin.
+
 ## Structure du dépôt
 
 ```
@@ -88,6 +128,19 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 - **Maven 3.8 ou plus récent** (`mvn -v`). Si Maven n'est pas installé, celui livré avec IntelliJ fonctionne :
   `"C:\Program Files\JetBrains\IntelliJ IDEA <version>\plugins\maven\lib\maven3\bin\mvn.cmd"`
 - **Fiji** ([fiji.sc](https://fiji.sc)) pour lancer le plugin.
+- **Git** pour cloner le dépôt.
+
+Installation rapide du JDK et de Maven :
+
+| Système | Commande |
+| --- | --- |
+| Ubuntu / Debian | `sudo apt install openjdk-17-jdk maven` |
+| macOS (Homebrew) | `brew install openjdk@17 maven` |
+| Windows | Installer un JDK (ex. Temurin 17) et Maven, ou utiliser ceux d'IntelliJ |
+
+Les dépendances (SciJava, ImageJ, Jama, JUnit…) sont téléchargées **automatiquement par Maven** au premier build : il n'y a rien d'autre à installer. Une connexion Internet est nécessaire la première fois.
+
+Les tests unitaires n'ont **pas besoin** des jeux de données ; seuls `JeuFire` et l'essai dans Fiji lisent `Donnees/`.
 
 ### Compiler
 
@@ -126,6 +179,24 @@ Après chaque modification du code : `mvn package`, recopier les jars, redémarr
 ### Paramètres
 
 Les réglages du prétraitement sont dans [`config/defaut.json`](config/defaut.json). Pour essayer d'autres valeurs, copier ce fichier plutôt que de le modifier. Les sorties d'exécution vont dans `executions/`, non versionné.
+
+## Contribuer
+
+- Travailler sur une branche (`git checkout -b ma-fonctionnalite`), ne pas pousser directement sur `main`.
+- Avant chaque commit : `mvn test` doit passer.
+- Ne pas versionner `Donnees/`, `target/`, `executions/` (déjà dans `.gitignore`).
+- Toute décision de conception qui affecte plusieurs modules est ajoutée à [`Docs/decisions.md`](Docs/decisions.md).
+- Code et commentaires en français, comme le reste du dépôt.
+
+## Dépannage
+
+| Problème | Piste |
+| --- | --- |
+| `mvn: command not found` | Maven non installé ou absent du `PATH` |
+| `release version 11 not supported` | JDK trop ancien : `java -version` |
+| La commande n'apparaît pas dans Fiji | Les **deux** jars sont-ils copiés ? Fiji a-t-il été redémarré ? |
+| `NoClassDefFoundError: Jama` | Copier `jama-1.0.3.jar` dans `Fiji.app/jars/` |
+| Images FIRE introuvables | Vérifier le chemin `Donnees/FIRE/FIRE/FIRE/Images/` |
 
 ## Valorisation
 
