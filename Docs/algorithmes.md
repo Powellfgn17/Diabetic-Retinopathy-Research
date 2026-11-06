@@ -485,25 +485,47 @@ réponse(σ) = σ² × λ2   si λ2 > 0   (vallée = vaisseau sombre)
 La liste 2, 3, 4, 6, 8 couvre surtout les vaisseaux de 3 à 13 px ; les plus gros répondent
 encore, un peu moins fort. Hors masque, la réponse vaut 0.
 
-### 9.5 Avant le Hessien : l'écrêtage à la médiane
+### 9.5 Avant le Hessien : l'écrêtage à la médiane locale
 
 **Problème découvert sur FIRE A01** : chaque exsudat (tache claire) était entouré d'un
 **anneau de faux vaisseaux**. Autour d'une bosse claire, le terrain remonte du fond vers la
 bosse ; ce « pied » est courbé vers le haut, comme le fond d'une vallée.
 
-**Solution** : avant le Hessien, on **plafonne** l'image à sa médiane dans le masque. Les
-bosses claires deviennent des plateaux : plus de pied, plus d'anneau. Les vaisseaux, plus
-sombres que la médiane, ne sont pas touchés.
+**Solution** : avant le Hessien, on **plafonne** l'image : chaque pixel plus clair que la
+médiane de son **voisinage** (fenêtre carrée de rayon `rayonEcretage`) est ramené à cette
+médiane. Les bosses claires deviennent des plateaux : plus de pied, plus d'anneau. Les
+vaisseaux, plus sombres que leur voisinage, ne sont pas touchés.
+
+**Pourquoi la médiane du voisinage et pas celle de tout le champ** (corrigé le 06/11) : la
+première version plafonnait à la médiane de **tout** le champ. Mais la rétine prétraitée
+n'est pas uniforme : elle garde des zones plus claires et plus sombres. Un vaisseau pâle qui
+traverse une zone claire restait au-dessus de la médiane globale : il était **aplati avant
+même le Hessien**, avec une réponse exactement nulle, alors qu'il est bien visible sur
+l'image (FIRE P30_2, vu dans le visualiseur). La médiane locale suit ces variations lentes du
+fond. Effet de bord heureux sur A01 : moins de faux vaisseaux entre les exsudats regroupés.
+
+**Comment c'est calculé (pour aller vite)** : la médiane n'est calculée que sur une grille
+(un nœud tous les r/2 pixels, en lisant un pixel sur r/25 de la fenêtre), puis interpolée
+entre les nœuds. Le fond varie lentement, l'approximation ne se voit pas. Environ 2 s par
+image FIRE. Près du bord du champ, seuls les pixels du masque comptent ; un nœud qui en voit
+trop peu prend la moyenne de ses voisins.
 
 Paramètre **`segmentation.percentileEcretage`** (défaut 50 = la médiane) :
 
 | Si on l'augmente (70) | Si on le diminue (30) |
 | --- | --- |
-| Les bosses claires gardent une partie de leur pied : les anneaux reviennent. **100 désactive l'écrêtage.** | On aplatit des vaisseaux pâles (fins ou sur fond sombre), qui disparaissent. |
+| Les bosses claires gardent une partie de leur pied : les anneaux reviennent. **100 désactive l'écrêtage.** | On aplatit des vaisseaux pâles, qui disparaissent. |
 
-**Limite :** les petits vaisseaux **sur le disque optique**, plus clairs que la médiane de
-la rétine, peuvent s'affaiblir. Le plafond s'applique aussi hors masque, sinon un extérieur
-plus clair formerait une marche vue comme un creux (cas trouvé par un test).
+Paramètre **`segmentation.rayonEcretage`** (défaut 50 px FIRE, multiplié par `facteurEchelle`) :
+
+| Si on l'augmente (150) | Si on le diminue (20) |
+| --- | --- |
+| On se rapproche de la médiane globale : les vaisseaux pâles des zones claires sont à nouveau aplatis. **0 = médiane de tout le champ** (ancienne version). | Un amas d'exsudats ou un gros vaisseau peut occuper plus de la moitié de la fenêtre : la médiane monte, les anneaux reviennent, et les gros troncs sont écrêtés. |
+
+**Le revers :** le bruit de fond, autrefois aplati dans les zones claires, répond maintenant
+partout de la même façon ; les seuils de l'hystérésis sont à régler en conséquence (section
+9.11). Le plafond s'applique aussi hors masque, sinon un extérieur plus clair formerait une
+marche vue comme un creux (cas trouvé par un test).
 
 ### 9.6 Et le bord du champ de vue ?
 
@@ -597,8 +619,34 @@ Testé sur A01, S01, P01, S20, P30 :
   de faux positifs dans la fovéa**, entre les exsudats regroupés (vrais creux sombres).
 - **Petites barbes** le long des vaisseaux.
 
-**Pas encore mesuré :** le Dice sur HRF (objectif ≥ 0,65). Les seuils sont des valeurs de
-départ, à régler sur les 15 images HRF de réglage.
+**Mesuré sur HRF (06/11/2026)**, sur les 15 images de réglage (01 à 05 de chaque catégorie ;
+les 30 autres ne sont pas touchées), avec `facteurEchelle` = 1,20 (champ de 3 250 px de large
+contre 2 710 sur FIRE, tous deux à 45°). « Fins trouvés » : part de la ligne centrale des
+vaisseaux tracés à la main de 6 px de large ou moins qui tombe dans notre masque.
+« Squelette juste » : part de notre squelette qui tombe sur un vrai vaisseau.
+
+| Écrêtage | Seuils haut / bas | Fins trouvés | Gros trouvés | Squelette juste | Dice | Surface / tracé |
+| --- | --- | --- | --- | --- | --- | --- |
+| global (ancien) | 94 / 88 | 38,6 % | 92,8 % | 89,3 % | 0,707 | 1,29 |
+| **local 50 px (défaut)** | **94 / 88** | **39,5 %** | **93,3 %** | **90,0 %** | **0,710** | 1,30 |
+| local 50 px | 92 / 92 | 19,9 % | 87,2 % | 95,2 % | 0,718 | 0,93 |
+| local 50 px | 92 / 86 | 52,5 % | 95,6 % | 84,1 % | 0,689 | 1,51 |
+| local 50 px | 94 / 84 | 54,5 % | 95,9 % | 82,2 % | 0,677 | 1,58 |
+| local 50 px | 90 / 84 | 63,5 % | 96,8 % | 76,1 % | 0,658 | 1,72 |
+
+Ce qu'on en retient :
+
+- **L'objectif de Dice est atteint** (0,71 ≥ 0,65), mais le Dice compte des pixels : il est
+  dominé par les gros troncs et ne voit presque pas les vaisseaux fins. Le meilleur Dice
+  (92 / 92) est celui qui perd le plus de vaisseaux fins.
+- **L'arbre manque de profondeur :** 4 vaisseaux fins sur 10 seulement. Pour les
+  bifurcations, c'est la colonne « fins trouvés » qui compte.
+- **Baisser le seuil bas** approfondit l'arbre mais ajoute de faux vaisseaux (barbes) et
+  élargit le masque. Choix à faire en groupe : 94 / 84 garde un Dice ≥ 0,65.
+- **Ajouter σ = 1,5 ou σ = 1 ne change rien** (mesuré) : à ces échelles σ²·λ2 reste plus
+  faible qu'à σ = 2.
+- **Le masque est trop large** (1,3 fois le tracé) : la réponse déborde du vaisseau. Peu
+  gênant pour le squelette, qui reste centré.
 
 ---
 
@@ -1187,6 +1235,7 @@ dont l'erreur maximale reste sous T), avec la marge d'erreur.
 | Segmentation ✅ | `segmentation.sigmas` | 2, 3, 4, 6, 8 | px FIRE | largeurs de vaisseaux cherchées | moyenne |
 | Segmentation ✅ | `segmentation.facteurEchelle` | 1,0 | — | adapte les tailles à un autre jeu | forte si mal réglé |
 | Segmentation ✅ | `segmentation.percentileEcretage` | 50 | % | aplatit les taches claires | moyenne |
+| Segmentation ✅ | `segmentation.rayonEcretage` | 50 | px FIRE | taille du voisinage de la médiane | moyenne |
 | Segmentation ✅ | `segmentation.percentileHaut` | 94 | % | germes de l'hystérésis | **forte** |
 | Segmentation ✅ | `segmentation.percentileBas` | 88 | % | extension de l'hystérésis | **forte** |
 | Segmentation ✅ | `segmentation.aireMin` | 150 | px FIRE | taille minimale d'un morceau | moyenne |
@@ -1209,7 +1258,8 @@ dont l'erreur maximale reste sous T), avec la marge d'erreur.
 | Ce qu'on voit | Cause probable | Que faire |
 | --- | --- | --- |
 | Anneau de faux vaisseaux autour du champ | Bande de transition dans le masque | Augmenter `erosion` ; vérifier que l'extérieur vaut 0 |
-| Anneaux autour des taches claires | Pied des bosses vu comme un creux | Vérifier que `percentileEcretage` n'est pas à 100 ; essayer 40 |
+| Anneaux autour des taches claires | Pied des bosses vu comme un creux | Vérifier que `percentileEcretage` n'est pas à 100 ; essayer 40 ; baisser `rayonEcretage` si les exsudats sont regroupés |
+| Vaisseau bien visible mais sans masque, réponse nulle | Aplati par l'écrêtage (zone plus claire que le plafond) | Vérifier que `rayonEcretage` n'est pas à 0 ; le baisser |
 | Petits vaisseaux absents | Seuils trop hauts, médian trop fort | Baisser `percentileHaut` / `percentileBas` ; ajouter σ = 1,5 ; baisser `filtreMedian.rayon` |
 | Réseau coupé en morceaux | Écart trop faible entre les deux seuils | Baisser `percentileBas` |
 | Petits points parasites | Bruit qui passe le seuil | Augmenter `aireMin` ou `percentileHaut` |

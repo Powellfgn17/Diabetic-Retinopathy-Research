@@ -95,7 +95,7 @@ Point 1 terminé (16/20, rapport remis le 1er novembre 2026). Point 2 la semaine
 | Étape de la chaîne | Module | État (6 novembre 2026) |
 | --- | --- | --- |
 | Prétraitement (canal vert, masque, éclairage, contraste, médian) | `retine-noyau` / `pretraitement` | Fait, testé |
-| Segmentation des vaisseaux (Hessien multi-échelle, hystérésis) | `retine-noyau` / `segmentation` | Faite, testée ; Dice sur HRF à mesurer (objectif ≥ 0,65) |
+| Segmentation des vaisseaux (Hessien multi-échelle, hystérésis) | `retine-noyau` / `segmentation` | Faite, testée. Écrêtage à la médiane **locale** depuis le 06/11 (les vaisseaux pâles des zones claires étaient aplatis). Dice **0,71** sur les 15 images de réglage HRF (objectif ≥ 0,65), mais seulement **40 % des vaisseaux fins** retrouvés : seuils à choisir en groupe (voir `Docs/algorithmes.md`, section 9.11) |
 | Visualiseur de la chaîne (paire de visites, étape par étape) | `retine-plugin` / `visualiseur` | Fait |
 | Squelette (Zhang-Suen, puis retrait des marches d'escalier) | `retine-noyau` / `squelette` | Fait, testé, visible dans le visualiseur |
 | Bifurcations (nombre de croisements, élagage, fusion) | — | Point 2, en cours (binôme A) |
@@ -113,7 +113,7 @@ Le code est séparé en deux modules Maven pour que les algorithmes restent test
 - **`retine-noyau`** : Java pur. Aucune dépendance à ImageJ.
   - `noyau/image/` : types de base (`ImageGris`, `ImageCouleur`, `Masque`, `ImageMasquee`).
   - `pretraitement/` : une classe par étape (`CanalVert`, `MasqueChampVision`, `CorrectionEclairage`, `RehaussementContraste`, `FiltreMedian`) assemblées par `ChainePretraitement`.
-  - `segmentation/` : `SegmentationHessienne` (écrêtage, Hessien multi-échelle, hystérésis, filtre d'aire).
+  - `segmentation/` : `SegmentationHessienne` (écrêtage à la médiane locale, Hessien multi-échelle, hystérésis, filtre d'aire).
   - `squelette/` : `AmincissementZhangSuen` (Zhang-Suen, puis retrait des marches d'escalier).
   - `chaine/` : interface `Etape`, `ContexteExecution`, et `Observateur`, prévenu après chaque étape (sert au visualiseur et aux figures).
   - `parametres/` : lecture de `config/defaut.json`.
@@ -147,6 +147,8 @@ Règle : toute logique algorithmique va dans `retine-noyau` ; `retine-plugin` ne
 > - Drive : [fire&idrid](https://drive.google.com/drive/folders/1zZWHoVnSXPMCaV4NuxjkuvBCyWTkmIzn?usp=sharing)
 >
 > Une fois l'archive FIRE extraite, les images se trouvent dans `Donnees/FIRE/FIRE/FIRE/` (sous-dossiers `Images/`, `Ground Truth/`, `Masks/`).
+>
+> HRF : ranger les images dans `Donnees/HRF/images/`, les vaisseaux tracés à la main dans `Donnees/HRF/manual1/` et les masques du champ dans `Donnees/HRF/mask/`. L'archive complète `all.zip` (76 Mo) se télécharge mal (coupures fréquentes) ; les tracés et les masques existent aussi en petites archives séparées sur la même page (`*_manualsegm.zip`, `*_fovmask.zip`, 6 Mo en tout). Images de réglage proposées : 01 à 05 de chaque catégorie (`_h`, `_g`, `_dr`), soit 15 ; les 30 autres sont réservées au test final (à valider par le groupe). HRF et FIRE couvrent tous deux 45°, avec un champ de 3 250 px de large contre 2 710 : pour HRF, `segmentation.facteurEchelle` = **1,20**.
 
 ## Compilation et exécution
 
@@ -247,6 +249,7 @@ Les réglages du prétraitement et de la segmentation sont dans [`config/defaut.
 | La commande n'apparaît pas dans Fiji | Les **deux** jars sont-ils copiés ? Fiji a-t-il été redémarré ? |
 | `NoClassDefFoundError: Jama` | Copier `jama-1.0.3.jar` dans `Fiji.app/jars/` |
 | Images FIRE introuvables, menu « paire FIRE » vide | Vérifier le chemin `Donnees/FIRE/FIRE/FIRE/Images/` ; lancer le visualiseur depuis la racine du dépôt |
+| Vaisseau bien visible mais sans masque (réponse nulle à l'étape « Réponse ») | Aplati par l'écrêtage : vérifier que `segmentation.rayonEcretage` n'est pas à 0 (voir `Docs/algorithmes.md`, section 9.5) |
 | `OutOfMemoryError` dans le visualiseur | Lancer avec `MAVEN_OPTS=-Xmx3g` (une paire FIRE occupe environ 1,5 Go) |
 
 ## Valorisation

@@ -24,13 +24,19 @@ import bj.epac.retine.parametres.Parametres;
  * λ2 fortement positive. Réponse {@code σ²·λ2} si λ2 > 0, sinon 0 (le facteur σ² rend
  * les échelles comparables).</li>
  * </ol>
- * <p>Avant le Hessien, l'image est écrêtée au percentile
- * {@code segmentation.percentileEcretage} de ses valeurs dans le masque (médiane par
- * défaut). Le pied d'une tache claire (exsudat, reflet) forme un creux que le Hessien
- * prend pour un vaisseau sombre : sur FIRE A01, chaque exsudat était entouré d'un anneau
- * de faux vaisseaux. Les vaisseaux étant plus sombres que le fond, l'écrêtage ne leur
- * retire rien ; seuls les petits vaisseaux du disque optique, plus clairs que la médiane
- * de la rétine, peuvent s'affaiblir. 100 désactive l'écrêtage.</p>
+ * <p>Avant le Hessien, l'image est écrêtée : tout ce qui dépasse le percentile
+ * {@code segmentation.percentileEcretage} (médiane par défaut) des valeurs du masque
+ * <em>autour du pixel</em>, dans une fenêtre de rayon {@code segmentation.rayonEcretage},
+ * est ramené à ce plafond. Le pied d'une tache claire (exsudat, reflet) forme un creux que
+ * le Hessien prend pour un vaisseau sombre : sur FIRE A01, chaque exsudat était entouré
+ * d'un anneau de faux vaisseaux. Les vaisseaux étant plus sombres que leur fond, l'écrêtage
+ * ne leur retire rien. 100 désactive l'écrêtage.</p>
+ *
+ * <p>Plafond local plutôt que global (06/11/2026) : avec la médiane de tout le champ, un
+ * vaisseau fin qui traverse une zone plus claire que la moyenne reste au-dessus du plafond
+ * et il est aplati avant même le Hessien (réponse nulle sur des vaisseaux nettement
+ * visibles, FIRE P30_2). Le plafond local suit ces variations lentes du fond. Rayon 0 :
+ * ancien plafond global.</p>
  *
  * <p>On garde le maximum sur les échelles, puis :</p>
  * <ol>
@@ -99,7 +105,7 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 	}
 
 	/** Noms des étapes transmis à l'observateur (les réponses par échelle s'y ajoutent). */
-	public static final String ECRETAGE = "Écrêtage à la médiane";
+	public static final String ECRETAGE = "Écrêtage à la médiane locale";
 	public static final String REPONSE = "Réponse multi-échelle (max σ²·λ2)";
 	public static final String GERMES = "Hystérésis : germes (seuil haut)";
 	public static final String HYSTERESIS = "Hystérésis : germes + pixels reliés";
@@ -130,6 +136,7 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 		double bas = p.reel("segmentation.percentileBas");
 		int aireMin = p.entier("segmentation.aireMin");
 		double ecretage = p.reel("segmentation.percentileEcretage");
+		double rayonEcretage = p.reel("segmentation.rayonEcretage");
 		if (!(facteur > 0)) {
 			throw new IllegalArgumentException("segmentation.facteurEchelle doit être > 0 : " + facteur);
 		}
@@ -152,12 +159,16 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 		if (aireMin < 0) {
 			throw new IllegalArgumentException("segmentation.aireMin doit être >= 0 : " + aireMin);
 		}
+		if (!(rayonEcretage >= 0)) {
+			throw new IllegalArgumentException("segmentation.rayonEcretage doit être >= 0 : " + rayonEcretage);
+		}
 
 		int l = entree.largeur();
 		int h = entree.hauteur();
 		boolean[] m = entree.masque().donneesBrutes();
 		Masque masque = entree.masque();
-		float[] img = ecreter(entree.image().donneesBrutes(), m, ecretage);
+		float[] img = ecreter(entree.image().donneesBrutes(), m, l, h, ecretage,
+				(int) Math.round(rayonEcretage * facteur));
 		obs.etape(ECRETAGE, ImageGris.enveloppe(img, l, h), masque);
 		BiConsumer<Double, float[]> parEchelle = obs == Observateur.AUCUN ? null
 				: (s, r) -> obs.etape(nomReponseEchelle(s), ImageGris.enveloppe(r, l, h), masque);
@@ -190,13 +201,14 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 	}
 
 	/**
-	 * Copie de l'image où tout ce qui dépasse le percentile {@code p} (calculé dans le
-	 * masque) est ramené à ce percentile ; 100 rend une copie inchangée. Le plafond
+	 * Copie de l'image où tout ce qui dépasse le percentile {@code p} des valeurs du masque
+	 * est ramené à ce percentile, calculé sur tout le masque (rayon 0) ou autour de chaque
+	 * pixel (voir {@link #plafondLocal}) ; 100 rend une copie inchangée. Le plafond
 	 * s'applique aussi hors masque : sinon un extérieur non nul et plus clair que le
 	 * plafond formerait une marche montante au bord du masque, donc un faux creux juste à
 	 * l'intérieur (en sortie de prétraitement l'extérieur vaut 0 et n'est pas touché).
 	 */
-	static float[] ecreter(float[] img, boolean[] m, double p) {
+	static float[] ecreter(float[] img, boolean[] m, int l, int h, double p, int rayon) {
 		float[] sortie = img.clone();
 		if (p >= 100) {
 			return sortie;
@@ -206,13 +218,128 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 			return sortie;
 		}
 		Arrays.sort(dans);
-		float plafond = percentile(dans, p);
+		float global = percentile(dans, p);
+		if (rayon <= 0) {
+			for (int i = 0; i < sortie.length; i++) {
+				if (sortie[i] > global) {
+					sortie[i] = global;
+				}
+			}
+			return sortie;
+		}
+		float[] plafond = plafondLocal(img, m, l, h, p, rayon, global);
 		for (int i = 0; i < sortie.length; i++) {
-			if (sortie[i] > plafond) {
-				sortie[i] = plafond;
+			if (sortie[i] > plafond[i]) {
+				sortie[i] = plafond[i];
 			}
 		}
 		return sortie;
+	}
+
+	/** Écrêtage global (rayon 0), pour les tests. */
+	static float[] ecreter(float[] img, boolean[] m, double p) {
+		return ecreter(img, m, 0, 0, p, 0);
+	}
+
+	/**
+	 * Plafond local : percentile {@code p} des valeurs du masque dans la fenêtre carrée de
+	 * rayon {@code r} centrée sur chaque pixel. Pour aller vite, il est calculé sur une
+	 * grille de pas r/2 (en ne lisant qu'un pixel sur {@code max(1, r/25)} dans chaque
+	 * direction), puis interpolé bilinéairement : le fond varie lentement, une erreur à
+	 * l'échelle du pixel est sans effet. Un nœud dont la fenêtre contient moins d'un
+	 * dixième de pixels du masque (bord du champ) prend la moyenne de ses voisins connus.
+	 *
+	 * @param global percentile sur tout le masque, utilisé si aucun nœud n'est calculable
+	 */
+	static float[] plafondLocal(float[] img, boolean[] m, int l, int h, double p, int r, float global) {
+		int pas = Math.max(1, r / 2);
+		int saut = Math.max(1, r / 25);
+		int gx = (l - 1) / pas + 2;
+		int gy = (h - 1) / pas + 2;
+		float[] g = new float[gx * gy];
+		int cote = (2 * r) / saut + 1;
+		int minimum = Math.max(1, cote * cote / 10);
+		IntStream.range(0, gy).parallel().forEach(a -> {
+			float[] buf = new float[cote * cote];
+			for (int b = 0; b < gx; b++) {
+				int cx = b * pas;
+				int cy = a * pas;
+				int n = 0;
+				for (int y = cy - r; y <= cy + r; y += saut) {
+					if (y < 0 || y >= h) {
+						continue;
+					}
+					for (int x = cx - r; x <= cx + r; x += saut) {
+						if (x >= 0 && x < l && m[y * l + x]) {
+							buf[n++] = img[y * l + x];
+						}
+					}
+				}
+				if (n < minimum) {
+					g[a * gx + b] = Float.NaN;
+				} else {
+					Arrays.sort(buf, 0, n);
+					g[a * gx + b] = buf[(int) Math.round(p / 100.0 * (n - 1))];
+				}
+			}
+		});
+		boucherGrille(g, gx, gy, global);
+		float[] sortie = new float[l * h];
+		IntStream.range(0, h).parallel().forEach(y -> {
+			int a = y / pas;
+			double v = (double) (y - a * pas) / pas;
+			for (int x = 0; x < l; x++) {
+				int b = x / pas;
+				double u = (double) (x - b * pas) / pas;
+				int i = a * gx + b;
+				sortie[y * l + x] = (float) ((1 - u) * (1 - v) * g[i] + u * (1 - v) * g[i + 1]
+						+ (1 - u) * v * g[i + gx] + u * v * g[i + gx + 1]);
+			}
+		});
+		return sortie;
+	}
+
+	/**
+	 * Remplace les nœuds inconnus (NaN) par la moyenne de leurs voisins connus, de proche en
+	 * proche ; tout à {@code defaut} si aucun nœud n'est connu.
+	 */
+	private static void boucherGrille(float[] g, int gx, int gy, float defaut) {
+		boolean inconnu = true;
+		boolean progres = true;
+		while (inconnu && progres) {
+			inconnu = false;
+			progres = false;
+			float[] c = g.clone();
+			for (int a = 0; a < gy; a++) {
+				for (int b = 0; b < gx; b++) {
+					if (!Float.isNaN(g[a * gx + b])) {
+						continue;
+					}
+					double s = 0;
+					int k = 0;
+					for (int da = -1; da <= 1; da++) {
+						for (int db = -1; db <= 1; db++) {
+							int aa = a + da;
+							int bb = b + db;
+							if (aa >= 0 && bb >= 0 && aa < gy && bb < gx && !Float.isNaN(g[aa * gx + bb])) {
+								s += g[aa * gx + bb];
+								k++;
+							}
+						}
+					}
+					if (k > 0) {
+						c[a * gx + b] = (float) (s / k);
+						progres = true;
+					} else {
+						inconnu = true;
+					}
+				}
+			}
+			System.arraycopy(c, 0, g, 0, g.length);
+		}
+		if (inconnu) {
+			Arrays.fill(g, defaut);
+		}
 	}
 
 	/** Réponse max_σ σ²·λ2⁺, mise à 0 hors masque. */

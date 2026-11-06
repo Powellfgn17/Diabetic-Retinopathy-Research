@@ -7,6 +7,7 @@
     "sigmas": [2, 3, 4, 6, 8],
     "facteurEchelle": 1.0,
     "percentileEcretage": 50.0,
+    "rayonEcretage": 50,
     "percentileHaut": 94.0,
     "percentileBas": 88.0,
     "aireMin": 150

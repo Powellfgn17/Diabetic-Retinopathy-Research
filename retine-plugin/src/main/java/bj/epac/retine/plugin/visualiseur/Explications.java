@@ -54,12 +54,14 @@ final class Explications {
 					+ "Paramètre : rayon (2). Attention : la détection des microanévrismes exigera au plus 3 × 3.";
 		}
 		if (SegmentationHessienne.ECRETAGE.equals(nom)) {
-			return "Tout ce qui est plus clair que la médiane du champ est plafonné : exsudats, reflets et "
-					+ "disque optique deviennent des plateaux plats.\n\n"
+			return "Tout ce qui est plus clair que la médiane de son voisinage (fenêtre de 50 px de rayon) "
+					+ "est plafonné : exsudats, reflets et disque optique deviennent des plateaux plats.\n\n"
 					+ "Pourquoi : le pied d'une tache claire ressemble à une vallée, et le Hessien l'aurait pris "
 					+ "pour un vaisseau (anneaux de faux vaisseaux autour des exsudats). Les vaisseaux, plus "
-					+ "sombres que la médiane, ne sont pas touchés.\n\n"
-					+ "Paramètre : écrêtage (50 %). 100 = désactivé.";
+					+ "sombres que leur voisinage, ne sont pas touchés.\n\n"
+					+ "Pourquoi « locale » : avec la médiane de tout le champ, un vaisseau pâle qui traverse une "
+					+ "zone claire était aplati, donc invisible pour le Hessien.\n\n"
+					+ "Paramètres : écrêtage (50 %, 100 = désactivé), rayon (50 px, 0 = médiane du champ entier).";
 		}
 		if (nom.startsWith("Réponse à σ")) {
 			return "Réponse du Hessien à UNE échelle : σ² × λ2 là où λ2 > 0 (une vallée, donc un vaisseau "

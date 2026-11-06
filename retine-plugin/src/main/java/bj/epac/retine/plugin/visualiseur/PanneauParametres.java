@@ -79,6 +79,8 @@ final class PanneauParametres extends JPanel {
 					"Multiplie les σ (et l'aire min. par son carré). Autre jeu : ppd du jeu / ppd de FIRE."),
 			new Def("segmentation.percentileEcretage", "Écrêtage (%)", Type.REEL, 0, 100, 1,
 					"Plafond qui aplatit les taches claires. 100 = désactivé : anneaux autour des exsudats."),
+			new Def("segmentation.rayonEcretage", "Rayon de l'écrêtage (px)", Type.REEL, 0, 1000, 5,
+					"Le plafond est la médiane autour du pixel, dans ce rayon. 0 = médiane de tout le champ : vaisseaux pâles des zones claires aplatis."),
 			new Def("segmentation.percentileHaut", "Seuil haut (%)", Type.REEL, 0, 100, 0.5,
 					"Germes de l'hystérésis. Plus haut : vaisseaux plus fins, réseau coupé, moins de bifurcations."),
 			new Def("segmentation.percentileBas", "Seuil bas (%)", Type.REEL, 0, 100, 0.5,

@@ -35,6 +35,7 @@ public final class Parametres {
 		DEFAUTS.put("segmentation.sigmas", new double[] { 2, 3, 4, 6, 8 });
 		DEFAUTS.put("segmentation.facteurEchelle", 1.0);
 		DEFAUTS.put("segmentation.percentileEcretage", 50.0);
+		DEFAUTS.put("segmentation.rayonEcretage", 50.0);
 		DEFAUTS.put("segmentation.percentileHaut", 94.0);
 		DEFAUTS.put("segmentation.percentileBas", 88.0);
 		DEFAUTS.put("segmentation.aireMin", 150);

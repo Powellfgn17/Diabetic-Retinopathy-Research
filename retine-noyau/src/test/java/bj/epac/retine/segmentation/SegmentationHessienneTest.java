@@ -193,6 +193,54 @@ public class SegmentationHessienneTest {
 		assertTrue("avec écrêtage, l'anneau ne répond plus (" + avec + " de la ligne)", avec < 0.02);
 	}
 
+	/**
+	 * Ligne pâle (profondeur 0,15) qui traverse une zone plus claire (+0,25, x < 60) que le
+	 * reste : dans cette zone elle reste au-dessus de la médiane globale (0,6).
+	 *
+	 * @return réponse sur la ligne dans la zone claire / réponse sur la ligne ailleurs
+	 */
+	private static double ligneEnZoneClaire(ContexteExecution c) {
+		float[] f = fond(0);
+		for (int y = 0; y < H; y++) {
+			for (int x = 0; x < 60; x++) {
+				f[y * L + x] += 0.25f;
+			}
+		}
+		ligne(f, 0, 100.5, 0, 0.15);
+		ImageGris r = new SegmentationHessienne().segmenter(plein(f), c).reponse();
+		return r.get(25, 100) / r.get(150, 100);
+	}
+
+	@Test
+	public void ecretageLocalGardeUnVaisseauPaleEnZoneClaire() {
+		double global = ligneEnZoneClaire(ctx("{\"rayonEcretage\": 0}"));
+		double local = ligneEnZoneClaire(ctx());
+		assertTrue("plafond global : la ligne est aplatie (" + global + ")", global < 0.01);
+		assertTrue("plafond local : la ligne répond (" + local + ")", local > 0.8);
+	}
+
+	@Test
+	public void plafondLocalSuitLeFondEtCouvreLeBordDuMasque() {
+		float[] f = new float[L * H];
+		for (int y = 0; y < H; y++) {
+			for (int x = 0; x < L; x++) {
+				f[y * L + x] = x < 100 ? 0.2f : 0.8f;
+			}
+		}
+		Masque m = Masque.cercle(L, H, 100, 100, 90);
+		float[] p = SegmentationHessienne.plafondLocal(f, m.donneesBrutes(), L, H, 50, 20, 0.5f);
+		assertEquals(0.2, p[100 * L + 40], 1e-6);
+		assertEquals(0.8, p[100 * L + 160], 1e-6);
+		for (float v : p) {
+			assertTrue("plafond défini partout, y compris hors masque", v >= 0.2f && v <= 0.8f);
+		}
+	}
+
+	@Test(expected = IllegalArgumentException.class)
+	public void rayonEcretageNegatifRefuse() {
+		new SegmentationHessienne().executer(plein(fond(0)), ctx("{\"rayonEcretage\": -1}"));
+	}
+
 	@Test
 	public void reponseEtVaisseauxNulsHorsMasque() {
 		float[] f = fond(0.005);
