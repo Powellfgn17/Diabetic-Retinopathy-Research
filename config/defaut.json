@@ -2,5 +2,13 @@
   "masqueChampVision": { "seuil": 0.08, "erosion": 7 },
   "correctionEclairage": { "sigmaRelatif": 0.05 },
   "rehaussementContraste": { "percentileBas": 1.0, "percentileHaut": 99.0 },
-  "filtreMedian": { "rayon": 2 }
+  "filtreMedian": { "rayon": 2 },
+  "segmentation": {
+    "sigmas": [2, 3, 4, 6, 8],
+    "facteurEchelle": 1.0,
+    "percentileEcretage": 50.0,
+    "percentileHaut": 94.0,
+    "percentileBas": 88.0,
+    "aireMin": 150
+  }
 }

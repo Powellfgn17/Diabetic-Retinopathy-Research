@@ -1,10 +1,13 @@
 package bj.epac.retine.parametres;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
 
+import com.google.gson.JsonArray;
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
 
@@ -28,6 +31,13 @@ public final class Parametres {
 		DEFAUTS.put("rehaussementContraste.percentileBas", 1.0);
 		DEFAUTS.put("rehaussementContraste.percentileHaut", 99.0);
 		DEFAUTS.put("filtreMedian.rayon", 2);
+		// Segmentation des vaisseaux (Point 2) — tailles en pixels FIRE, voir facteurEchelle
+		DEFAUTS.put("segmentation.sigmas", new double[] { 2, 3, 4, 6, 8 });
+		DEFAUTS.put("segmentation.facteurEchelle", 1.0);
+		DEFAUTS.put("segmentation.percentileEcretage", 50.0);
+		DEFAUTS.put("segmentation.percentileHaut", 94.0);
+		DEFAUTS.put("segmentation.percentileBas", 88.0);
+		DEFAUTS.put("segmentation.aireMin", 150);
 	}
 
 	private final JsonObject racine;
@@ -78,6 +88,39 @@ public final class Parametres {
 		}
 		String v = e.getAsString();
 		utilises.put(cle, v);
+		return v;
+	}
+
+	/**
+	 * @param cle clé « section.cle »
+	 * @return la liste de réels (tableau JSON, sinon défaut), copie modifiable par l'appelant
+	 * @throws IllegalArgumentException si la clé n'existe ni dans le JSON ni dans les défauts,
+	 *                                  ou si la valeur JSON n'est pas un tableau
+	 */
+	public double[] reels(String cle) {
+		JsonElement e = dansJson(cle);
+		double[] v;
+		if (e != null) {
+			if (!e.isJsonArray()) {
+				throw new IllegalArgumentException("Tableau JSON attendu pour " + cle + " : " + e);
+			}
+			JsonArray a = e.getAsJsonArray();
+			v = new double[a.size()];
+			for (int i = 0; i < v.length; i++) {
+				v[i] = a.get(i).getAsDouble();
+			}
+		} else {
+			Object d = DEFAUTS.get(cle);
+			if (!(d instanceof double[])) {
+				throw new IllegalArgumentException("Paramètre liste inconnu : " + cle);
+			}
+			v = ((double[]) d).clone();
+		}
+		List<Double> trace = new ArrayList<Double>(v.length);
+		for (double x : v) {
+			trace.add(x);
+		}
+		utilises.put(cle, Collections.unmodifiableList(trace)); // toString() = tableau JSON valide
 		return v;
 	}
 
