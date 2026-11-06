@@ -60,7 +60,7 @@ Une chaîne de traitement classique fondée sur les bifurcations vasculaires, le
 
 ## Par où commencer (nouveau contributeur)
 
-1. **Comprendre le sujet :** lire les sections *Contexte* à *Méthodologie* ci-dessus, puis `Docs/Projet_Retinopathie_Diabetique.pdf` (problématique) et `Docs/Plan_de_travail_Retinopathie_sans_IA.pdf` (découpage en points). `Docs/Revue_bibliographique_retinopathie (1).docx` résume l'état de l'art.
+1. **Comprendre le sujet :** lire les sections *Contexte* à *Méthodologie* ci-dessus, puis `Docs/docs_v2/LISEZMOI.md` (ce qui a changé depuis le Point 1), `Docs/docs_v2/Projet_Retinopathie_Diabetique_v2.pdf` (problématique), `Docs/docs_v2/Plan_de_travail_Retinopathie_sans_IA_v2.pdf` (découpage en points) et `Docs/docs_v2/Protocole_et_Plan_Point2.pdf` (protocole d'évaluation). `Docs/docs_v1/Revue_bibliographique_retinopathie (1).docx` résume l'état de l'art ; `Docs/docs_v1/` garde les versions du Point 1.
 2. **Comprendre les choix techniques :** lire [`Docs/decisions.md`](Docs/decisions.md) (conventions de coordonnées, format 32 bits, etc.). Ces décisions s'appliquent à tout le code.
 3. **Récupérer le code et les données :**
    ```bash
@@ -107,7 +107,7 @@ Règle : toute logique algorithmique va dans `retine-noyau` ; `retine-plugin` ne
 ├── retine-noyau/    Algorithmes en Java pur, sans dépendance à ImageJ
 ├── retine-plugin/   Plugin Fiji : adaptateur ImageJ et commandes de menu
 ├── resultats/       Tableaux et résultats d'évaluation
-├── Docs/            Documents de cadrage du projet (problématique, plan de travail)
+├── Docs/            decisions.md, puis les documents de cadrage : docs_v2/ (à jour), docs_v1/ (Point 1)
 └── Donnees/         Jeux de données publics (non versionnés, voir ci-dessous)
     ├── FIRE/        Fundus Image Registration Dataset (recalage, 134 paires)
     └── IDRiD/       Jeu annoté pour la segmentation des lésions
