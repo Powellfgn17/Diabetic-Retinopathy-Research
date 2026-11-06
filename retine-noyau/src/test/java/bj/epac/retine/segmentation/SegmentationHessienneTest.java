@@ -233,6 +233,40 @@ public class SegmentationHessienneTest {
 	}
 
 	@Test
+	public void observateurVoitToutesLesEtapesSansChangerLeResultat() {
+		float[] f = fond(0.005);
+		ligne(f, 0, 100.5, 0, 0.3);
+		java.util.List<String> noms = new java.util.ArrayList<String>();
+		java.util.List<Masque> masques = new java.util.ArrayList<Masque>();
+		SegmentationHessienne.Resultat avec = new SegmentationHessienne().segmenter(plein(f.clone()), ctxUneLigne(),
+				(nom, image, masque) -> {
+					noms.add(nom);
+					masques.add(masque);
+				});
+		SegmentationHessienne.Resultat sans = new SegmentationHessienne().segmenter(plein(f.clone()), ctxUneLigne());
+		java.util.List<String> attendus = new java.util.ArrayList<String>();
+		attendus.add(SegmentationHessienne.ECRETAGE);
+		for (double s : new double[] { 2, 3, 4, 6, 8 }) {
+			attendus.add(SegmentationHessienne.nomReponseEchelle(s));
+		}
+		attendus.add(SegmentationHessienne.REPONSE);
+		attendus.add(SegmentationHessienne.GERMES);
+		attendus.add(SegmentationHessienne.HYSTERESIS);
+		attendus.add(SegmentationHessienne.VAISSEAUX);
+		assertEquals(attendus, noms);
+		assertArrayEquals(sans.reponse().donneesBrutes(), avec.reponse().donneesBrutes(), 0f);
+		assertArrayEquals(sans.vaisseaux().donneesBrutes(), avec.vaisseaux().donneesBrutes());
+		// germes ⊂ hystérésis ⊃ résultat final
+		boolean[] germes = masques.get(noms.indexOf(SegmentationHessienne.GERMES)).donneesBrutes();
+		boolean[] hyst = masques.get(noms.indexOf(SegmentationHessienne.HYSTERESIS)).donneesBrutes();
+		boolean[] fin = avec.vaisseaux().donneesBrutes();
+		for (int i = 0; i < fin.length; i++) {
+			assertTrue(!germes[i] || hyst[i]);
+			assertTrue(!fin[i] || hyst[i]);
+		}
+	}
+
+	@Test
 	public void entreeInchangee() {
 		float[] f = fond(0.005);
 		ligne(f, 0, 100.5, 0, 0.3);

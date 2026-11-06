@@ -164,13 +164,32 @@ Commandes utiles :
 | `mvn clean package` | Repart de zéro (supprime les dossiers `target/`) |
 | `mvn -pl retine-noyau test` | Ne teste que le module noyau |
 
+### Visualiser la chaîne étape par étape
+
+Le visualiseur ouvre une image du fond d'œil, exécute le prétraitement et la segmentation, et affiche **chaque étape au moment où elle est calculée** (16 étapes, environ 17 s pour une image FIRE). Depuis la racine du dépôt :
+
+```bash
+mvn -q install -DskipTests          # une fois, puis après chaque modification du code
+mvn -q -pl retine-plugin exec:java  # ouvre la fenêtre
+```
+
+Puis « Ouvrir une image… » (ou glisser-déposer une image sur la fenêtre). Dans la fenêtre :
+
+- **liste à gauche** : les étapes dans l'ordre de la chaîne, avec leur durée ; flèches ↑ ↓ pour passer de l'une à l'autre ; en dessous, ce que montre l'étape choisie et les paramètres qui la règlent ;
+- **image** : molette pour zoomer autour du curseur, glisser pour se déplacer, double-clic pour tout voir ; la barre du bas donne la position et la valeur du pixel sous la souris ;
+- **Avant / après** : deux étapes côte à côte avec le même zoom (par défaut l'étape précédente à gauche) ;
+- **paramètres à droite** : modifier une valeur puis « Relancer » ; le zoom et l'étape affichée sont conservés, pour comparer au même endroit ; survoler un paramètre affiche son effet ; « Enregistrer… » sauve un JSON réutilisable ;
+- **Exporter les étapes…** : toutes les images en PNG pleine résolution, avec les paramètres utilisés, dans `executions/<date>-visualiseur-<image>/` (pour les rapports).
+
+Le visualiseur existe aussi dans Fiji : **Plugins › RDR › Visualiseur**. Les algorithmes et leurs paramètres sont expliqués dans [`Docs/algorithmes.md`](Docs/algorithmes.md).
+
 ### Installer et lancer le plugin dans Fiji
 
 1. Fermer Fiji.
 2. Copier **les deux jars** dans le dossier de Fiji :
    - `retine-plugin-0.1.0-SNAPSHOT.jar` dans `Fiji.app/plugins/`
    - `retine-noyau-0.1.0-SNAPSHOT.jar` dans `Fiji.app/jars/`
-3. Relancer Fiji : la commande apparaît dans **Plugins › RDR › Pretraitement**.
+3. Relancer Fiji : les commandes apparaissent dans **Plugins › RDR** (Pretraitement, Visualiseur).
 
 Après chaque modification du code : `mvn package`, recopier les jars, redémarrer Fiji.
 

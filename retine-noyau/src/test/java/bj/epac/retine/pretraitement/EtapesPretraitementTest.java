@@ -154,4 +154,15 @@ public class EtapesPretraitementTest {
 		double mu = s / n;
 		return Math.sqrt(s2 / n - mu * mu);
 	}
+	@Test
+	public void chaineObserveeDonneLeMemeResultatEtLesEtapesDansLOrdre() {
+		ImageCouleur img = disque(300, 260, 150, 130, 100, 0.5);
+		java.util.List<String> noms = new java.util.ArrayList<String>();
+		ChainePretraitement.Resultat avec = new ChainePretraitement().executer(img, ctx(),
+				(nom, image, masque) -> noms.add(nom));
+		ChainePretraitement.Resultat sans = new ChainePretraitement().executer(img, ctx());
+		assertEquals(java.util.Arrays.asList(ChainePretraitement.CANAL_VERT, ChainePretraitement.MASQUE,
+				ChainePretraitement.ECLAIRAGE, ChainePretraitement.CONTRASTE, ChainePretraitement.MEDIAN), noms);
+		assertArrayEquals(sans.pretraitee().image().donneesBrutes(), avec.pretraitee().image().donneesBrutes(), 0f);
+	}
 }

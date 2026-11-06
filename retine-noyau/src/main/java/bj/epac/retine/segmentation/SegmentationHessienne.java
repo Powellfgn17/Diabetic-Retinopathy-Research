@@ -1,10 +1,12 @@
 package bj.epac.retine.segmentation;
 
 import java.util.Arrays;
+import java.util.function.BiConsumer;
 import java.util.stream.IntStream;
 
 import bj.epac.retine.chaine.ContexteExecution;
 import bj.epac.retine.chaine.Etape;
+import bj.epac.retine.chaine.Observateur;
 import bj.epac.retine.noyau.image.ImageGris;
 import bj.epac.retine.noyau.image.ImageMasquee;
 import bj.epac.retine.noyau.image.Masque;
@@ -93,6 +95,34 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 	 * @return réponse et masque des vaisseaux
 	 */
 	public Resultat segmenter(ImageMasquee entree, ContexteExecution ctx) {
+		return segmenter(entree, ctx, Observateur.AUCUN);
+	}
+
+	/** Noms des étapes transmis à l'observateur (les réponses par échelle s'y ajoutent). */
+	public static final String ECRETAGE = "Écrêtage à la médiane";
+	public static final String REPONSE = "Réponse multi-échelle (max σ²·λ2)";
+	public static final String GERMES = "Hystérésis : germes (seuil haut)";
+	public static final String HYSTERESIS = "Hystérésis : germes + pixels reliés";
+	public static final String VAISSEAUX = "Vaisseaux (après filtre d'aire)";
+
+	/** @return le nom transmis à l'observateur pour la réponse à l'échelle σ (en pixels) */
+	public static String nomReponseEchelle(double sigma) {
+		String v = String.format(java.util.Locale.FRANCE, "%.2f", sigma).replaceAll(",?0+$", ""); // 2 ; 1,5
+		return "Réponse à σ = " + v + " px";
+	}
+
+	/**
+	 * Comme {@link #segmenter(ImageMasquee, ContexteExecution)}, en prévenant {@code obs}
+	 * après chaque étape : écrêtage, réponse de chaque échelle, réponse multi-échelle,
+	 * germes, hystérésis, résultat. Les réponses par échelle ne sont copiées que si un
+	 * observateur est fourni.
+	 *
+	 * @param entree image prétraitée et son masque
+	 * @param ctx    contexte (paramètres {@code segmentation.*})
+	 * @param obs    observateur des résultats intermédiaires
+	 * @return réponse et masque des vaisseaux
+	 */
+	public Resultat segmenter(ImageMasquee entree, ContexteExecution ctx, Observateur obs) {
 		Parametres p = ctx.parametres();
 		double facteur = p.reel("segmentation.facteurEchelle");
 		double[] sigmas = p.reels("segmentation.sigmas");
@@ -126,8 +156,14 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 		int l = entree.largeur();
 		int h = entree.hauteur();
 		boolean[] m = entree.masque().donneesBrutes();
+		Masque masque = entree.masque();
 		float[] img = ecreter(entree.image().donneesBrutes(), m, ecretage);
-		float[] rep = reponse(img, m, l, h, sigmas);
+		obs.etape(ECRETAGE, ImageGris.enveloppe(img, l, h), masque);
+		BiConsumer<Double, float[]> parEchelle = obs == Observateur.AUCUN ? null
+				: (s, r) -> obs.etape(nomReponseEchelle(s), ImageGris.enveloppe(r, l, h), masque);
+		float[] rep = reponse(img, m, l, h, sigmas, parEchelle);
+		ImageGris reponse = ImageGris.enveloppe(rep, l, h);
+		obs.etape(REPONSE, reponse, masque);
 
 		float[] dansMasque = valeursDansMasque(rep, m);
 		if (dansMasque.length == 0) {
@@ -136,9 +172,21 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 		Arrays.sort(dansMasque);
 		float seuilHaut = percentile(dansMasque, haut);
 		float seuilBas = percentile(dansMasque, bas);
+		if (obs != Observateur.AUCUN) {
+			boolean[] germes = new boolean[rep.length];
+			for (int i = 0; i < rep.length; i++) {
+				germes[i] = m[i] && rep[i] > 0 && rep[i] >= seuilHaut;
+			}
+			obs.etape(GERMES, reponse, Masque.enveloppe(germes, l, h));
+		}
 		boolean[] v = hysteresis(rep, m, l, h, seuilHaut, seuilBas);
+		if (obs != Observateur.AUCUN) {
+			obs.etape(HYSTERESIS, reponse, new Masque(v, l, h)); // copie : v est encore filtré
+		}
 		retirerPetitesComposantes(v, l, h, (int) Math.round(aireMin * facteur * facteur));
-		return new Resultat(ImageGris.enveloppe(rep, l, h), Masque.enveloppe(v, l, h));
+		Masque vaisseaux = Masque.enveloppe(v, l, h);
+		obs.etape(VAISSEAUX, entree.image(), vaisseaux);
+		return new Resultat(reponse, vaisseaux);
 	}
 
 	/**
@@ -169,6 +217,15 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 
 	/** Réponse max_σ σ²·λ2⁺, mise à 0 hors masque. */
 	static float[] reponse(float[] img, boolean[] m, int l, int h, double[] sigmas) {
+		return reponse(img, m, l, h, sigmas, null);
+	}
+
+	/**
+	 * Idem, et si {@code parEchelle} n'est pas null, lui passe la réponse de chaque échelle
+	 * (nouveau tableau, 0 hors masque, propriété transférée).
+	 */
+	static float[] reponse(float[] img, boolean[] m, int l, int h, double[] sigmas,
+			BiConsumer<Double, float[]> parEchelle) {
 		int n = l * h;
 		float[] max = new float[n];
 		float[] tmp = new float[n];
@@ -187,6 +244,7 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 			convolutionX(img, tmp, l, h, g1);
 			convolutionY(tmp, dxy, l, h, g1);
 			final double s2 = s * s;
+			final float[] ech = parEchelle == null ? null : new float[n];
 			IntStream.range(0, h).parallel().forEach(y -> {
 				for (int i = y * l, fin = i + l; i < fin; i++) {
 					double t = 0.5 * (dxx[i] + dyy[i]);
@@ -199,8 +257,14 @@ public final class SegmentationHessienne implements Etape<ImageMasquee, Masque> 
 					if (r > max[i]) {
 						max[i] = r;
 					}
+					if (ech != null && m[i]) {
+						ech[i] = r;
+					}
 				}
 			});
+			if (parEchelle != null) {
+				parEchelle.accept(s, ech);
+			}
 		}
 		for (int i = 0; i < n; i++) {
 			if (!m[i]) {

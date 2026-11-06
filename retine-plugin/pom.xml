@@ -13,6 +13,11 @@
   <artifactId>retine-plugin</artifactId>
   <name>Retine - Plugin Fiji</name>
 
+  <properties>
+    <!-- mvn -q -pl retine-plugin exec:java : lance le visualiseur de la chaîne -->
+    <exec.mainClass>bj.epac.retine.plugin.visualiseur.VisualiseurChaine</exec.mainClass>
+  </properties>
+
   <dependencies>
     <dependency>
       <groupId>bj.epac.retine</groupId>
