@@ -21,7 +21,9 @@ import bj.epac.retine.noyau.image.Masque;
  * valeurs dans le masque (l'échelle est rappelée sous l'image) ;</li>
  * <li>{@link Genre#CARTE} : idem avec une palette « chaleur » (réponses du Hessien) ;</li>
  * <li>{@link Genre#CHAMP} : l'image, avec l'extérieur du masque teinté de rouge ;</li>
- * <li>{@link Genre#SUPERPOSE} : l'image en gris, avec les pixels du masque colorés.</li>
+ * <li>{@link Genre#SUPERPOSE} : l'image en gris, avec les pixels du masque colorés ;</li>
+ * <li>{@link Genre#SQUELETTE} : l'image en gris, les vaisseaux en vert pâle et le squelette
+ * en trait foncé, épaissi à 3 px à l'affichage seulement pour rester visible.</li>
  * </ul>
  * <p>Sauf l'image d'origine, les rendus sont en 8 bits (gris ou palette) : 4 fois moins de
  * mémoire qu'en RGB, ce qui compte avec deux visites de 2912 × 2912 et 16 étapes.</p>
@@ -29,7 +31,7 @@ import bj.epac.retine.noyau.image.Masque;
 final class EtapeVisible {
 
 	enum Genre {
-		COULEUR, GRIS, CARTE, CHAMP, SUPERPOSE
+		COULEUR, GRIS, CARTE, CHAMP, SUPERPOSE, SQUELETTE
 	}
 
 	private static final double P_BAS = 0.5;
@@ -38,12 +40,16 @@ final class EtapeVisible {
 	private static final int[][] PALETTE = { { 0, 0, 4 }, { 81, 18, 124 }, { 183, 55, 121 }, { 252, 137, 97 },
 			{ 252, 253, 191 } };
 	private static final Color ROUGE_HORS_CHAMP = new Color(200, 0, 0);
+	private static final Color VERT_PALE = new Color(120, 220, 120);
+	private static final Color TRAIT_SQUELETTE = new Color(150, 0, 110);
 
 	private final int numero;
 	private final String nom;
 	private final Genre genre;
 	private final ImageGris image;
 	private final Masque masque;
+	/** Pour le squelette : le masque des vaisseaux, affiché dessous. */
+	private final Masque masqueFond;
 	private final Color teinte;
 	private final double secondes;
 	private final int largeur;
@@ -55,6 +61,12 @@ final class EtapeVisible {
 
 	private EtapeVisible(int numero, String nom, Genre genre, ImageCouleur couleur, ImageGris image, Masque masque,
 			Color teinte, double secondes) {
+		this(numero, nom, genre, couleur, image, masque, null, teinte, secondes);
+	}
+
+	private EtapeVisible(int numero, String nom, Genre genre, ImageCouleur couleur, ImageGris image, Masque masque,
+			Masque masqueFond, Color teinte, double secondes) {
+		this.masqueFond = masqueFond;
 		this.numero = numero;
 		this.nom = nom;
 		this.genre = genre;
@@ -81,6 +93,11 @@ final class EtapeVisible {
 
 	static EtapeVisible superpose(int numero, String nom, ImageGris fond, Masque m, Color teinte, double secondes) {
 		return new EtapeVisible(numero, nom, Genre.SUPERPOSE, null, fond, m, teinte, secondes);
+	}
+
+	static EtapeVisible squelette(int numero, String nom, ImageGris fond, Masque vaisseaux, Masque squelette,
+			double secondes) {
+		return new EtapeVisible(numero, nom, Genre.SQUELETTE, null, fond, squelette, vaisseaux, TRAIT_SQUELETTE, secondes);
 	}
 
 	int numero() {
@@ -137,6 +154,8 @@ final class EtapeVisible {
 			return v + "   dans le champ de vue : " + dans;
 		case SUPERPOSE:
 			return v + "   coloré : " + dans;
+		case SQUELETTE:
+			return v + "   squelette : " + dans + "   vaisseau : " + (masqueFond.estDans(x, y) ? "oui" : "non");
 		default:
 			return v + (masque.estDans(x, y) ? "" : "   (hors du champ de vue)");
 		}
@@ -159,7 +178,7 @@ final class EtapeVisible {
 		float[] d = image.donneesBrutes();
 		boolean[] m = masque != null ? masque.donneesBrutes() : null;
 		// pour les masques superposés, l'échelle se calcule sur toute l'image, pas dans le masque coloré
-		double[] bornes = percentiles(d, genre == Genre.SUPERPOSE ? null : m);
+		double[] bornes = percentiles(d, genre == Genre.SUPERPOSE || genre == Genre.SQUELETTE ? null : m);
 		double lo = bornes[0];
 		double hi = bornes[1] > bornes[0] ? bornes[1] : bornes[0] + 1e-9;
 		echelle = String.format(Locale.FRANCE, "affichage : noir = %.4g   %s = %.4g", lo,
@@ -173,10 +192,15 @@ final class EtapeVisible {
 		case CARTE:
 			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_INDEXED, paletteChaleur());
 			break;
+		case SQUELETTE:
+			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_INDEXED, paletteSquelette());
+			break;
 		default: // CHAMP, SUPERPOSE : 128 niveaux de gris, puis les mêmes 128 niveaux teintés
 			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_INDEXED, paletteTeintee(teinte));
 		}
 		byte[] px = ((DataBufferByte) b.getRaster().getDataBuffer()).getData();
+		boolean[] trait = genre == Genre.SQUELETTE ? epaissir(m, largeur, hauteur) : null;
+		boolean[] fond = genre == Genre.SQUELETTE ? masqueFond.donneesBrutes() : null;
 		for (int i = 0; i < n; i++) {
 			double t = (d[i] - lo) / (hi - lo);
 			t = t < 0 ? 0 : (t > 1 ? 1 : t);
@@ -186,6 +210,9 @@ final class EtapeVisible {
 				break;
 			case CARTE:
 				px[i] = (byte) ((m == null || m[i]) ? Math.round(t * 255) : 0);
+				break;
+			case SQUELETTE: // 0–84 gris, 85–169 vaisseau (vert pâle), 255 squelette
+				px[i] = (byte) (trait[i] ? 255 : Math.round(t * 84) + (fond[i] ? 85 : 0));
 				break;
 			case CHAMP: // teinté = hors du champ
 				px[i] = (byte) (Math.round(t * 127) + (m[i] ? 0 : 128));
@@ -212,6 +239,47 @@ final class EtapeVisible {
 			bl[i] = (byte) (a[2] + f * (c[2] - a[2]));
 		}
 		return new IndexColorModel(8, 256, r, g, bl);
+	}
+
+	/** Indices 0–84 : gris ; 85–169 : gris mêlé de vert pâle ; 170–255 : trait du squelette. */
+	private static IndexColorModel paletteSquelette() {
+		byte[] r = new byte[256];
+		byte[] g = new byte[256];
+		byte[] bl = new byte[256];
+		for (int k = 0; k < 85; k++) {
+			int v = Math.round(k * 255f / 84f);
+			r[k] = g[k] = bl[k] = (byte) v;
+			r[85 + k] = (byte) ((v + VERT_PALE.getRed()) / 2);
+			g[85 + k] = (byte) ((v + VERT_PALE.getGreen()) / 2);
+			bl[85 + k] = (byte) ((v + VERT_PALE.getBlue()) / 2);
+		}
+		for (int k = 170; k < 256; k++) {
+			r[k] = (byte) TRAIT_SQUELETTE.getRed();
+			g[k] = (byte) TRAIT_SQUELETTE.getGreen();
+			bl[k] = (byte) TRAIT_SQUELETTE.getBlue();
+		}
+		return new IndexColorModel(8, 256, r, g, bl);
+	}
+
+	/** Dilatation 3 × 3 pour l'affichage : un trait d'un pixel disparaîtrait dès qu'on dézoome. */
+	private static boolean[] epaissir(boolean[] m, int l, int h) {
+		boolean[] e = new boolean[m.length];
+		for (int y = 0; y < h; y++) {
+			for (int x = 0; x < l; x++) {
+				if (!m[y * l + x]) {
+					continue;
+				}
+				for (int dy = -1; dy <= 1; dy++) {
+					for (int dx = -1; dx <= 1; dx++) {
+						int xx = x + dx, yy = y + dy;
+						if (xx >= 0 && yy >= 0 && xx < l && yy < h) {
+							e[yy * l + xx] = true;
+						}
+					}
+				}
+			}
+		}
+		return e;
 	}
 
 	/** Indices 0–127 : gris ; 128–255 : le même gris mélangé à 75 % avec la teinte. */

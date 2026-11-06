@@ -65,6 +65,7 @@ import bj.epac.retine.parametres.Parametres;
 import bj.epac.retine.plugin.AdaptateurImageJ;
 import bj.epac.retine.pretraitement.ChainePretraitement;
 import bj.epac.retine.segmentation.SegmentationHessienne;
+import bj.epac.retine.squelette.AmincissementZhangSuen;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.process.ImageConverter;
@@ -478,6 +479,7 @@ public final class VisualiseurChaine extends JFrame {
 			private long top;
 			private int numero;
 			private ImageGris dernierFond;
+			private Masque derniersVaisseaux;
 
 			Visite(int visite, Path image) {
 				this.visite = visite;
@@ -502,8 +504,10 @@ public final class VisualiseurChaine extends JFrame {
 				Observateur obs = (nom, img, masque) -> publier(convertir(nom, img, masque));
 				ChainePretraitement.Resultat pr = new ChainePretraitement().executer(c, ctx, obs);
 				SegmentationHessienne.Resultat s = new SegmentationHessienne().segmenter(pr.pretraitee(), ctx, obs);
-				return String.format(Locale.FRANCE, "%s : vaisseaux %.1f %% du champ", COURT[visite],
-						100.0 * s.vaisseaux().nombrePixelsActifs() / pr.masque().nombrePixelsActifs());
+				Masque squelette = new AmincissementZhangSuen().executer(s.vaisseaux(), ctx, obs);
+				return String.format(Locale.FRANCE, "%s : vaisseaux %.1f %% du champ, squelette %d px", COURT[visite],
+						100.0 * s.vaisseaux().nombrePixelsActifs() / pr.masque().nombrePixelsActifs(),
+						squelette.nombrePixelsActifs());
 			}
 
 			private EtapeVisible convertir(String nom, ImageGris img, Masque masque) {
@@ -518,7 +522,11 @@ public final class VisualiseurChaine extends JFrame {
 				if (SegmentationHessienne.HYSTERESIS.equals(nom)) {
 					return EtapeVisible.superpose(n, nom, dernierFond, masque, new Color(255, 190, 0), s);
 				}
+				if (AmincissementZhangSuen.ZHANG_SUEN.equals(nom) || AmincissementZhangSuen.MARCHES.equals(nom)) {
+					return EtapeVisible.squelette(n, nom, dernierFond, derniersVaisseaux, masque, s);
+				}
 				if (SegmentationHessienne.VAISSEAUX.equals(nom)) {
+					derniersVaisseaux = masque;
 					return EtapeVisible.superpose(n, nom, img, masque, new Color(20, 200, 50), s);
 				}
 				if (ChainePretraitement.MEDIAN.equals(nom)) {

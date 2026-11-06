@@ -2,6 +2,7 @@ package bj.epac.retine.plugin.visualiseur;
 
 import bj.epac.retine.pretraitement.ChainePretraitement;
 import bj.epac.retine.segmentation.SegmentationHessienne;
+import bj.epac.retine.squelette.AmincissementZhangSuen;
 
 /**
  * Textes « Qu'est-ce que je regarde ? » affichés pour chaque étape. Version courte de
@@ -93,6 +94,27 @@ final class Explications {
 					+ "vaisseaux (ils feraient des boucles dans le squelette), peu de barbes (fausses "
 					+ "bifurcations), rien le long du bord.\n\n"
 					+ "Sur FIRE, environ 10 à 11 % du champ est classé vaisseau.";
+		}
+		if (AmincissementZhangSuen.ZHANG_SUEN.equals(nom)) {
+			return "En violet : le squelette, c'est-à-dire la ligne centrale des vaisseaux (en vert pâle). Il est "
+					+ "épaissi à 3 px à l'affichage pour rester visible : la valeur sous la souris donne le vrai "
+					+ "pixel.\n\n"
+					+ "Zhang-Suen ronge le masque couche par couche, en ne retirant que les pixels dont la "
+					+ "disparition ne coupe rien et ne raccourcit pas les extrémités, en alternant deux "
+					+ "sous-passes (bords sud-est, puis nord-ouest) pour rester centré.\n\n"
+					+ "À regarder en zoomant fort : là où la ligne tourne ou descend en diagonale, il reste des "
+					+ "« marches d'escalier » (deux pixels là où un seul suffirait). Comparez avec l'étape "
+					+ "suivante (« Avant | après »).\n\nAucun paramètre.";
+		}
+		if (AmincissementZhangSuen.MARCHES.equals(nom)) {
+			return "Le squelette final : les marches d'escalier ont été retirées, sans couper ni raccourcir "
+					+ "aucune ligne. Chaque pixel a maintenant exactement un voisin par branche (environ 12 % des "
+					+ "pixels retirés sur FIRE).\n\n"
+					+ "C'est l'entrée de la détection des bifurcations : un pixel avec 3 branches (nombre de "
+					+ "croisements CN = 3) est une bifurcation, 4 un croisement, 1 une extrémité.\n\n"
+					+ "À vérifier : les petites branches courtes le long des vaisseaux viennent des barbes du "
+					+ "masque ; l'élagage (12 px) les retirera. Une boucle signale un trou dans un vaisseau du "
+					+ "masque.";
 		}
 		return "";
 	}

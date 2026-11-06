@@ -36,7 +36,7 @@ Ce document est à mettre à jour à chaque étape codée.
 **Partie B — Trouver les points de repère**
 
 9. [Segmentation des vaisseaux (Hessien)](#9-segmentation-des-vaisseaux-hessien--codé) ✅
-10. [Squelette (Zhang-Suen)](#10-squelette-zhang-suen--point-2) 🔨
+10. [Squelette (Zhang-Suen)](#10-squelette-zhang-suen--codé) ✅
 11. [Bifurcations et croisements](#11-bifurcations-et-croisements--point-2) 🔨
 12. [Descripteur de Zernike](#12-descripteur-de-zernike--point-2) 🔨
 
@@ -602,9 +602,9 @@ départ, à régler sur les 15 images HRF de réglage.
 
 ---
 
-## 10. Squelette (Zhang-Suen) 🔨 Point 2
+## 10. Squelette (Zhang-Suen) ✅ Codé
 
-**Classe prévue :** `squelette/AmincissementZhangSuen` (Elnis) · **Décision :** D3
+**Classe :** `squelette/AmincissementZhangSuen` · **Décision :** D3
 **Entrée :** masque des vaisseaux · **Sortie :** squelette (lignes d'un pixel d'épaisseur)
 
 ### Pourquoi
@@ -641,16 +641,67 @@ autour de lui à partir du voisin du haut :
 | Sous-passe 2 : P2·P4·P8 = 0 et P2·P6·P8 = 0 | ronge les bords nord et ouest |
 
 On alterne les deux sous-passes pour que le squelette reste **centré**. Tous les pixels à
-retirer dans une sous-passe sont marqués d'abord, puis retirés ensemble.
+retirer dans une sous-passe sont marqués d'abord, puis retirés ensemble. Seuls les pixels
+encore allumés sont parcourus, et les conditions sont précalculées pour les 256
+voisinages possibles : environ **0,3 s** pour une image FIRE.
+
+### Deuxième passe : retirer les marches d'escalier
+
+Zhang-Suen laisse des pixels en trop là où une ligne tourne ou descend en diagonale : deux
+pixels qui se touchent par un côté là où un seul, touchant par un coin, suffirait.
+
+```
+ Zhang-Suen        après retrait
+ X . .             X . .
+ X X .             . X .
+ . X X             . . X
+```
+
+On retire donc, un par un dans l'ordre de lecture, chaque pixel qui :
+
+- n'est **pas une extrémité** (au moins 2 voisins allumés) ;
+- est **simple** : ses voisins allumés forment un seul morceau (8-connexité), et ses voisins
+  éteints qui touchent ses côtés aussi (4-connexité). Le retirer ne coupe donc aucune
+  ligne et n'ouvre ni ne bouche aucun trou.
+
+Le résultat est une ligne d'**un pixel en 8-connexité** : chaque pixel a exactement un
+voisin par branche. Une bifurcation peut se déplacer d'un pixel, jamais disparaître.
+
+**Mesuré sur FIRE S01 (06/11/2026) :** cette passe retire 12 % des pixels de Zhang-Suen.
+Le nombre de croisements de la section 11 y est peu sensible (408 jonctions avant, 410
+après) : il compte des passages, pas des voisins. Mais sans cette passe, 14 784 pixels
+ordinaires ont 3 voisins ou plus. Or l'élagage des barbes **suit chaque branche pixel par
+pixel** depuis son extrémité : il lui faut un seul pixel suivant à chaque pas.
 
 ### Pourquoi codé nous-mêmes (D3)
 
 Fiji propose `AnalyzeSkeleton`, mais le cœur du traitement ne doit pas dépendre d'ImageJ
 pour servir au logiciel autonome. Zhang-Suen tient en une centaine de lignes.
 
-### Tests prévus
+### Tests (11, tous verts)
 
-Une ligne, un Y, une croix et une image non carrée de 7 × 13 px.
+Ceux du protocole : **une ligne** épaisse (ligne centrée, 2 extrémités), **un Y** (une seule
+bifurcation, au centre), **une croix** (un croisement ou deux bifurcations à moins de
+8 px), **une image non carrée** de 7 × 13 et de 13 × 7 (squelette sur la colonne ou la
+ligne du milieu). En plus : un anneau garde son trou (boucle fermée, sans extrémité), une
+ligne déjà fine reste inchangée, une forme qui touche le bord de l'image, deux morceaux
+restent séparés, l'entrée n'est pas modifiée. Pour chaque forme, un contrôle indépendant
+vérifie qu'aucun pixel ne pourrait être retiré sans changer la topologie.
+
+### Ce qu'il donne sur FIRE
+
+| Image | Pixels de vaisseaux | Squelette | Jonctions (CN ≥ 3) | Extrémités |
+| --- | --- | --- | --- | --- |
+| S01_1 | 570 385 | 36 608 | 410 | 426 |
+| A01_1 | 611 254 | 42 935 | 656 | 756 |
+| P30_2 | 567 320 | 39 086 | 509 | 528 |
+
+Il y a presque autant d'extrémités que de jonctions : la plupart sont des **barbes**, de
+courtes branches nées du bruit collé au bord des vaisseaux. Le visualiseur montre aussi
+des **boucles** près du disque optique, autour de petits trous du masque des vaisseaux.
+Ce n'est pas un défaut du squelette, qui conserve fidèlement la topologie du masque :
+c'est l'élagage (section 11) et un éventuel bouchage des petits trous du masque qui
+devront les traiter.
 
 ### Paramètres
 

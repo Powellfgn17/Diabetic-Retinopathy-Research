@@ -97,7 +97,8 @@ Point 1 terminé (16/20, rapport remis le 1er novembre 2026). Point 2 la semaine
 | Prétraitement (canal vert, masque, éclairage, contraste, médian) | `retine-noyau` / `pretraitement` | Fait, testé |
 | Segmentation des vaisseaux (Hessien multi-échelle, hystérésis) | `retine-noyau` / `segmentation` | Faite, testée ; Dice sur HRF à mesurer (objectif ≥ 0,65) |
 | Visualiseur de la chaîne (paire de visites, étape par étape) | `retine-plugin` / `visualiseur` | Fait |
-| Squelette (Zhang-Suen), bifurcations | — | Point 2, en cours (binôme A) |
+| Squelette (Zhang-Suen, puis retrait des marches d'escalier) | `retine-noyau` / `squelette` | Fait, testé, visible dans le visualiseur |
+| Bifurcations (nombre de croisements, élagage, fusion) | — | Point 2, en cours (binôme A) |
 | Descripteur de Zernike, appariement | — | Point 2, en cours (binôme A) |
 | Lecture des jeux (`JeuFire`, `JeuHrf`), découpage, vérité terrain | `retine-noyau` / `jeux` | Point 2, en cours (binôme B) |
 | Mesures Dice, GM/IM, EER | — | Point 2 (binôme B) |
@@ -113,6 +114,7 @@ Le code est séparé en deux modules Maven pour que les algorithmes restent test
   - `noyau/image/` : types de base (`ImageGris`, `ImageCouleur`, `Masque`, `ImageMasquee`).
   - `pretraitement/` : une classe par étape (`CanalVert`, `MasqueChampVision`, `CorrectionEclairage`, `RehaussementContraste`, `FiltreMedian`) assemblées par `ChainePretraitement`.
   - `segmentation/` : `SegmentationHessienne` (écrêtage, Hessien multi-échelle, hystérésis, filtre d'aire).
+  - `squelette/` : `AmincissementZhangSuen` (Zhang-Suen, puis retrait des marches d'escalier).
   - `chaine/` : interface `Etape`, `ContexteExecution`, et `Observateur`, prévenu après chaque étape (sert au visualiseur et aux figures).
   - `parametres/` : lecture de `config/defaut.json`.
   - `jeux/` : accès aux données (`JeuFire`, `PaireImages`).
@@ -192,7 +194,7 @@ Commandes utiles :
 
 ### Visualiser la chaîne étape par étape
 
-Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (16 étapes, environ 20 s pour une paire FIRE). Depuis la racine du dépôt :
+Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (18 étapes, jusqu'au squelette, environ 20 s pour une paire FIRE). Depuis la racine du dépôt :
 
 ```bash
 mvn -q install -DskipTests          # une fois, puis après chaque modification du code
