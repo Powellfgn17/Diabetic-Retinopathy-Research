@@ -9,6 +9,9 @@ executions/
 target/
 executions/
 
-Docs/brief-claude-code-p1.md
-Docs/brief-claude-code-p1-suite.md
-Docs/brief-claude-code-p1-verif.md
+# Briefs Claude Code (où qu'ils soient rangés sous Docs/)
+Docs/**/brief-claude-code-*.md
+
+# Échanges CSV entre binômes (D6) et verrous LibreOffice
+resultats/point2/
+.~lock.*#
