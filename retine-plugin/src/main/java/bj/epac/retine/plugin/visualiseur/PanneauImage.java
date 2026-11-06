@@ -33,6 +33,8 @@ final class PanneauImage extends JComponent {
 		private double zoom = 0; // pixels écran par pixel image ; 0 = pas encore ajusté
 		private double cx;
 		private double cy;
+		/** Vrai tant que l'utilisateur n'a ni zoomé ni déplacé : l'image suit alors la taille du panneau. */
+		private boolean ajusteeAuto = true;
 		private final List<Runnable> abonnes = new ArrayList<Runnable>();
 
 		void abonner(Runnable r) {
@@ -55,19 +57,28 @@ final class PanneauImage extends JComponent {
 		/** Oublie le zoom : la prochaine image affichée sera ajustée à la fenêtre. */
 		void reinitialiser() {
 			zoom = 0;
+			ajusteeAuto = true;
 		}
 	}
 
+	/** Couleurs du thème clair. */
+	private static final Color FOND = new Color(236, 237, 241);
+	private static final Color TEXTE = new Color(35, 35, 40);
+	private static final Color TEXTE_DISCRET = new Color(110, 110, 120);
+	private static final Color BANDEAU = new Color(255, 255, 255, 225);
+	private static final Color BORDURE = new Color(190, 192, 200);
+
 	private final Vue vue;
-	private final String titreParDefaut;
 	private EtapeVisible etape;
+	private String titre = "";
+	private String siVide;
 	private Consumer<String> barreEtat = s -> {
 	};
 	private Point dernier;
 
-	PanneauImage(Vue vue, String titreParDefaut) {
+	PanneauImage(Vue vue, String siVide) {
 		this.vue = vue;
-		this.titreParDefaut = titreParDefaut;
+		this.siVide = siVide;
 		setPreferredSize(new Dimension(700, 700));
 		setOpaque(true);
 		vue.abonner(this::repaint);
@@ -83,6 +94,7 @@ final class PanneauImage extends JComponent {
 					double dx = (e.getX() - dernier.x) / vue.zoom;
 					double dy = (e.getY() - dernier.y) / vue.zoom;
 					dernier = e.getPoint();
+					vue.ajusteeAuto = false;
 					vue.changer(vue.zoom, vue.cx - dx, vue.cy - dy);
 				}
 				signaler(e.getPoint());
@@ -109,10 +121,19 @@ final class PanneauImage extends JComponent {
 				double ix = versImageX(e.getX());
 				double iy = versImageY(e.getY());
 				double z = Math.max(0.02, Math.min(40, vue.zoom * facteur));
+				vue.ajusteeAuto = false;
 				// garder le pixel sous le curseur au même endroit
 				vue.changer(z, ix - (e.getX() - getWidth() / 2.0) / z, iy - (e.getY() - getHeight() / 2.0) / z);
 			}
 		};
+		addComponentListener(new java.awt.event.ComponentAdapter() {
+			@Override
+			public void componentResized(java.awt.event.ComponentEvent e) {
+				if (vue.ajusteeAuto) {
+					ajuster();
+				}
+			}
+		});
 		addMouseListener(souris);
 		addMouseMotionListener(souris);
 		addMouseWheelListener(souris);
@@ -122,8 +143,15 @@ final class PanneauImage extends JComponent {
 		this.barreEtat = c;
 	}
 
-	void afficher(EtapeVisible e) {
+	/**
+	 * @param e      étape à afficher, ou null
+	 * @param titre  texte du bandeau du haut
+	 * @param siVide message affiché quand {@code e} est null
+	 */
+	void afficher(EtapeVisible e, String titre, String siVide) {
 		this.etape = e;
+		this.titre = titre;
+		this.siVide = siVide;
 		if (e != null && vue.zoom <= 0 && getWidth() > 0) {
 			ajuster();
 		}
@@ -140,6 +168,7 @@ final class PanneauImage extends JComponent {
 			return;
 		}
 		double z = Math.min(getWidth() / (double) etape.largeur(), getHeight() / (double) etape.hauteur());
+		vue.ajusteeAuto = true;
 		vue.changer(z * 0.98, etape.largeur() / 2.0, etape.hauteur() / 2.0);
 	}
 
@@ -164,11 +193,11 @@ final class PanneauImage extends JComponent {
 	@Override
 	protected void paintComponent(Graphics g0) {
 		Graphics2D g = (Graphics2D) g0;
-		g.setColor(new Color(24, 24, 28));
+		g.setColor(FOND);
 		g.fillRect(0, 0, getWidth(), getHeight());
 		g.setRenderingHint(RenderingHints.KEY_TEXT_ANTIALIASING, RenderingHints.VALUE_TEXT_ANTIALIAS_ON);
 		if (etape == null) {
-			texteCentre(g, titreParDefaut);
+			texteCentre(g, siVide);
 			return;
 		}
 		if (vue.zoom <= 0) {
@@ -197,7 +226,7 @@ final class PanneauImage extends JComponent {
 					: RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 			g.drawImage(img, dx1, dy1, dx2, dy2, ix1, iy1, ix2, iy2, null);
 		}
-		bandeau(g, etape.numero() + ". " + etape.nom(), 8, true);
+		bandeau(g, titre, 8, true);
 		String bas = String.format(Locale.FRANCE, "zoom %.0f %%", z * 100)
 				+ (etape.echelle().isEmpty() ? "" : "   ·   " + etape.echelle());
 		bandeau(g, bas, getHeight() - 8, false);
@@ -209,14 +238,16 @@ final class PanneauImage extends JComponent {
 		int w = fm.stringWidth(texte) + 16;
 		int h = fm.getHeight() + 6;
 		int y0 = enHaut ? y : y - h;
-		g.setColor(new Color(0, 0, 0, 170));
+		g.setColor(BANDEAU);
 		g.fillRoundRect(8, y0, w, h, 8, 8);
-		g.setColor(Color.WHITE);
+		g.setColor(BORDURE);
+		g.drawRoundRect(8, y0, w, h, 8, 8);
+		g.setColor(TEXTE);
 		g.drawString(texte, 16, y0 + 3 + fm.getAscent());
 	}
 
 	private void texteCentre(Graphics2D g, String texte) {
-		g.setColor(new Color(170, 170, 180));
+		g.setColor(TEXTE_DISCRET);
 		g.setFont(getFont().deriveFont(Font.PLAIN, 15f));
 		FontMetrics fm = g.getFontMetrics();
 		g.drawString(texte, (getWidth() - fm.stringWidth(texte)) / 2, getHeight() / 2);

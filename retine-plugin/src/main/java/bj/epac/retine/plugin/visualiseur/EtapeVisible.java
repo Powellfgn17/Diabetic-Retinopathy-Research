@@ -2,6 +2,8 @@ package bj.epac.retine.plugin.visualiseur;
 
 import java.awt.Color;
 import java.awt.image.BufferedImage;
+import java.awt.image.DataBufferByte;
+import java.awt.image.IndexColorModel;
 import java.util.Locale;
 
 import bj.epac.retine.noyau.image.ImageCouleur;
@@ -9,18 +11,20 @@ import bj.epac.retine.noyau.image.ImageGris;
 import bj.epac.retine.noyau.image.Masque;
 
 /**
- * Un résultat intermédiaire prêt à afficher : les données (immuables, gardées pour lire
- * la valeur sous la souris) et leur rendu en image écran, calculé une fois.
+ * Un résultat intermédiaire d'une visite, prêt à afficher : les données (immuables,
+ * gardées pour lire la valeur sous la souris) et leur rendu écran, calculé une fois.
  *
  * <p>Rendu selon le genre :</p>
  * <ul>
- * <li>{@link Genre#COULEUR} : l'image d'origine ;</li>
+ * <li>{@link Genre#COULEUR} : l'image d'origine (RGB) ;</li>
  * <li>{@link Genre#GRIS} : niveaux de gris étirés entre les percentiles 0,5 et 99,5 des
  * valeurs dans le masque (l'échelle est rappelée sous l'image) ;</li>
  * <li>{@link Genre#CARTE} : idem avec une palette « chaleur » (réponses du Hessien) ;</li>
  * <li>{@link Genre#CHAMP} : l'image, avec l'extérieur du masque teinté de rouge ;</li>
  * <li>{@link Genre#SUPERPOSE} : l'image en gris, avec les pixels du masque colorés.</li>
  * </ul>
+ * <p>Sauf l'image d'origine, les rendus sont en 8 bits (gris ou palette) : 4 fois moins de
+ * mémoire qu'en RGB, ce qui compte avec deux visites de 2912 × 2912 et 16 étapes.</p>
  */
 final class EtapeVisible {
 
@@ -33,15 +37,19 @@ final class EtapeVisible {
 	/** Palette « chaleur » (proche de magma) : du noir au jaune pâle. */
 	private static final int[][] PALETTE = { { 0, 0, 4 }, { 81, 18, 124 }, { 183, 55, 121 }, { 252, 137, 97 },
 			{ 252, 253, 191 } };
+	private static final Color ROUGE_HORS_CHAMP = new Color(200, 0, 0);
 
 	private final int numero;
 	private final String nom;
 	private final Genre genre;
-	private final ImageCouleur couleur;
 	private final ImageGris image;
 	private final Masque masque;
 	private final Color teinte;
 	private final double secondes;
+	private final int largeur;
+	private final int hauteur;
+	/** Libérée après le rendu : la valeur sous la souris est relue dans le rendu RGB. */
+	private ImageCouleur couleur;
 	private BufferedImage rendu;
 	private String echelle = "";
 
@@ -55,6 +63,8 @@ final class EtapeVisible {
 		this.masque = masque;
 		this.teinte = teinte;
 		this.secondes = secondes;
+		this.largeur = couleur != null ? couleur.largeur() : image.largeur();
+		this.hauteur = couleur != null ? couleur.hauteur() : image.hauteur();
 	}
 
 	static EtapeVisible couleur(int numero, String nom, ImageCouleur c, double secondes) {
@@ -66,7 +76,7 @@ final class EtapeVisible {
 	}
 
 	static EtapeVisible champ(int numero, String nom, ImageGris fond, Masque m, double secondes) {
-		return new EtapeVisible(numero, nom, Genre.CHAMP, null, fond, m, null, secondes);
+		return new EtapeVisible(numero, nom, Genre.CHAMP, null, fond, m, ROUGE_HORS_CHAMP, secondes);
 	}
 
 	static EtapeVisible superpose(int numero, String nom, ImageGris fond, Masque m, Color teinte, double secondes) {
@@ -86,15 +96,15 @@ final class EtapeVisible {
 	}
 
 	int largeur() {
-		return couleur != null ? couleur.largeur() : image.largeur();
+		return largeur;
 	}
 
 	int hauteur() {
-		return couleur != null ? couleur.hauteur() : image.hauteur();
+		return hauteur;
 	}
 
 	/** @return l'échelle d'affichage (« noir = …, blanc = … »), vide pour la couleur */
-	String echelle() {
+	synchronized String echelle() {
 		return echelle;
 	}
 
@@ -102,18 +112,20 @@ final class EtapeVisible {
 	synchronized BufferedImage rendu() {
 		if (rendu == null) {
 			rendu = calculerRendu();
+			couleur = null;
 		}
 		return rendu;
 	}
 
 	/** @return la description du pixel (x, y) pour la barre d'état */
 	String valeurA(int x, int y) {
-		if (x < 0 || y < 0 || x >= largeur() || y >= hauteur()) {
+		if (x < 0 || y < 0 || x >= largeur || y >= hauteur) {
 			return "";
 		}
-		if (couleur != null) {
-			return String.format(Locale.FRANCE, "R = %.3f   V = %.3f   B = %.3f", couleur.rougeBrut()[y * largeur() + x],
-					couleur.vertBrut()[y * largeur() + x], couleur.bleuBrut()[y * largeur() + x]);
+		if (genre == Genre.COULEUR) {
+			int c = rendu().getRGB(x, y);
+			return String.format(Locale.FRANCE, "R = %.3f   V = %.3f   B = %.3f", ((c >> 16) & 0xff) / 255.0,
+					((c >> 8) & 0xff) / 255.0, (c & 0xff) / 255.0);
 		}
 		String v = String.format(Locale.FRANCE, "valeur = %.4f", image.get(x, y));
 		if (masque == null) {
@@ -131,53 +143,90 @@ final class EtapeVisible {
 	}
 
 	private BufferedImage calculerRendu() {
-		int l = largeur();
-		int h = hauteur();
-		BufferedImage b = new BufferedImage(l, h, BufferedImage.TYPE_INT_RGB);
-		int[] px = new int[l * h];
+		int n = largeur * hauteur;
 		if (genre == Genre.COULEUR) {
+			BufferedImage b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_INT_RGB);
+			int[] px = new int[n];
 			float[] r = couleur.rougeBrut();
 			float[] v = couleur.vertBrut();
 			float[] bl = couleur.bleuBrut();
-			for (int i = 0; i < px.length; i++) {
+			for (int i = 0; i < n; i++) {
 				px[i] = (octet(r[i]) << 16) | (octet(v[i]) << 8) | octet(bl[i]);
 			}
-		} else {
-			float[] d = image.donneesBrutes();
-			boolean[] m = masque != null ? masque.donneesBrutes() : null;
-			// pour les masques superposés, l'échelle se calcule dans le champ de vue, pas dans le masque coloré
-			double[] bornes = percentiles(d, genre == Genre.SUPERPOSE ? null : m);
-			double lo = bornes[0];
-			double hi = bornes[1] > bornes[0] ? bornes[1] : bornes[0] + 1e-9;
-			echelle = String.format(Locale.FRANCE, "affichage : noir = %.4g   %s = %.4g", lo,
-					genre == Genre.CARTE ? "jaune" : "blanc", hi);
-			int tr = teinte != null ? teinte.getRed() : 0;
-			int tg = teinte != null ? teinte.getGreen() : 0;
-			int tb = teinte != null ? teinte.getBlue() : 0;
-			for (int i = 0; i < px.length; i++) {
-				double t = (d[i] - lo) / (hi - lo);
-				t = t < 0 ? 0 : (t > 1 ? 1 : t);
-				switch (genre) {
-				case CARTE:
-					px[i] = (m == null || m[i]) ? palette(t) : 0;
-					break;
-				case CHAMP: {
-					int g = (int) Math.round(t * 255);
-					px[i] = m[i] ? gris(g) : rgb((g + 2 * 200) / 3, g / 3, g / 3);
-					break;
-				}
-				case SUPERPOSE: {
-					int g = (int) Math.round(t * 255);
-					px[i] = m[i] ? rgb((g + 3 * tr) / 4, (g + 3 * tg) / 4, (g + 3 * tb) / 4) : gris(g);
-					break;
-				}
-				default:
-					px[i] = gris((int) Math.round(t * 255));
-				}
+			b.setRGB(0, 0, largeur, hauteur, px, 0, largeur);
+			return b;
+		}
+		float[] d = image.donneesBrutes();
+		boolean[] m = masque != null ? masque.donneesBrutes() : null;
+		// pour les masques superposés, l'échelle se calcule sur toute l'image, pas dans le masque coloré
+		double[] bornes = percentiles(d, genre == Genre.SUPERPOSE ? null : m);
+		double lo = bornes[0];
+		double hi = bornes[1] > bornes[0] ? bornes[1] : bornes[0] + 1e-9;
+		echelle = String.format(Locale.FRANCE, "affichage : noir = %.4g   %s = %.4g", lo,
+				genre == Genre.CARTE ? "jaune" : "blanc", hi);
+
+		BufferedImage b;
+		switch (genre) {
+		case GRIS:
+			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_GRAY);
+			break;
+		case CARTE:
+			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_INDEXED, paletteChaleur());
+			break;
+		default: // CHAMP, SUPERPOSE : 128 niveaux de gris, puis les mêmes 128 niveaux teintés
+			b = new BufferedImage(largeur, hauteur, BufferedImage.TYPE_BYTE_INDEXED, paletteTeintee(teinte));
+		}
+		byte[] px = ((DataBufferByte) b.getRaster().getDataBuffer()).getData();
+		for (int i = 0; i < n; i++) {
+			double t = (d[i] - lo) / (hi - lo);
+			t = t < 0 ? 0 : (t > 1 ? 1 : t);
+			switch (genre) {
+			case GRIS:
+				px[i] = (byte) Math.round(t * 255);
+				break;
+			case CARTE:
+				px[i] = (byte) ((m == null || m[i]) ? Math.round(t * 255) : 0);
+				break;
+			case CHAMP: // teinté = hors du champ
+				px[i] = (byte) (Math.round(t * 127) + (m[i] ? 0 : 128));
+				break;
+			default: // SUPERPOSE : teinté = dans le masque
+				px[i] = (byte) (Math.round(t * 127) + (m[i] ? 128 : 0));
 			}
 		}
-		b.setRGB(0, 0, l, h, px, 0, l);
 		return b;
+	}
+
+	private static IndexColorModel paletteChaleur() {
+		byte[] r = new byte[256];
+		byte[] g = new byte[256];
+		byte[] bl = new byte[256];
+		for (int i = 0; i < 256; i++) {
+			double x = i / 255.0 * (PALETTE.length - 1);
+			int k = Math.min(PALETTE.length - 2, (int) x);
+			double f = x - k;
+			int[] a = PALETTE[k];
+			int[] c = PALETTE[k + 1];
+			r[i] = (byte) (a[0] + f * (c[0] - a[0]));
+			g[i] = (byte) (a[1] + f * (c[1] - a[1]));
+			bl[i] = (byte) (a[2] + f * (c[2] - a[2]));
+		}
+		return new IndexColorModel(8, 256, r, g, bl);
+	}
+
+	/** Indices 0–127 : gris ; 128–255 : le même gris mélangé à 75 % avec la teinte. */
+	private static IndexColorModel paletteTeintee(Color t) {
+		byte[] r = new byte[256];
+		byte[] g = new byte[256];
+		byte[] bl = new byte[256];
+		for (int k = 0; k < 128; k++) {
+			int v = Math.round(k * 255f / 127f);
+			r[k] = g[k] = bl[k] = (byte) v;
+			r[128 + k] = (byte) ((v + 3 * t.getRed()) / 4);
+			g[128 + k] = (byte) ((v + 3 * t.getGreen()) / 4);
+			bl[128 + k] = (byte) ((v + 3 * t.getBlue()) / 4);
+		}
+		return new IndexColorModel(8, 256, r, g, bl);
 	}
 
 	/** Percentiles 0,5 et 99,5 des valeurs (dans le masque s'il est donné), par histogramme. */
@@ -219,30 +268,8 @@ final class EtapeVisible {
 		return min + hist.length * pas;
 	}
 
-	private static int palette(double t) {
-		double x = t * (PALETTE.length - 1);
-		int k = Math.min(PALETTE.length - 2, (int) x);
-		double f = x - k;
-		int[] a = PALETTE[k];
-		int[] c = PALETTE[k + 1];
-		return rgb((int) (a[0] + f * (c[0] - a[0])), (int) (a[1] + f * (c[1] - a[1])), (int) (a[2] + f * (c[2] - a[2])));
-	}
-
 	private static int octet(float v) {
 		int x = Math.round(v * 255f);
 		return x < 0 ? 0 : (x > 255 ? 255 : x);
-	}
-
-	private static int gris(int g) {
-		return rgb(g, g, g);
-	}
-
-	private static int rgb(int r, int g, int b) {
-		return (r << 16) | (g << 8) | b;
-	}
-
-	@Override
-	public String toString() {
-		return String.format(Locale.FRANCE, "%2d. %s   (%.1f s)", numero, nom, secondes);
 	}
 }
