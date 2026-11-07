@@ -86,7 +86,7 @@ Le logiciel est destiné à un usage hospitalier, mais restera un prototype tant
    ```
    puis télécharger les jeux de données (voir *Structure du dépôt*).
 4. **Compiler et tester :** `mvn package` (voir *Compilation et exécution*).
-5. **Voir le résultat :** lancer le visualiseur (`mvn -q -pl retine-plugin exec:java`, voir *Visualiser la chaîne étape par étape*) et choisir une paire FIRE.
+5. **Voir le résultat :** lancer le visualiseur (`mvn -q -o -pl retine-plugin exec:java`, voir *Visualiser la chaîne étape par étape*) et choisir une paire FIRE.
 
 ## Avancement
 
@@ -203,7 +203,7 @@ Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référen
 
 ```bash
 mvn -q install -DskipTests          # une fois, puis après chaque modification du code
-mvn -q -pl retine-plugin exec:java  # ouvre la fenêtre
+mvn -q -o -pl retine-plugin exec:java  # ouvre la fenêtre (-o : hors-ligne, voir ci-dessous)
 ```
 
 Pour charger une paire : choisir un identifiant dans **« paire FIRE »** (A01, P12, S20…), ou **« Ouvrir deux visites… »** (sélectionner les deux images ; pour FIRE, choisir `A01_1.jpg` suffit, `A01_2.jpg` est trouvée seule), ou glisser-déposer les images sur la fenêtre. Une image seule reste possible (HRF, IDRiD) : annuler quand la visite 2 est demandée.
@@ -215,7 +215,9 @@ Pour charger une paire : choisir un identifiant dans **« paire FIRE »** (A01, 
 - **Paramètres à droite**, communs aux deux visites : modifier une valeur puis « Relancer » ; le zoom et l'étape affichée sont conservés ; survoler un paramètre affiche son effet ; « Enregistrer… » sauve un JSON réutilisable.
 - **Exporter les étapes…** : toutes les images des deux visites en PNG pleine résolution (`v1_…`, `v2_…`), les paramètres utilisés, et les CSV d'échange D6 (`bifurcations/<paire>_<visite>.csv`, `descripteurs/<paire>_<visite>_R<rayon>.csv`), dans `executions/<date>-visualiseur-<paire>/`.
 
-Mémoire : une paire FIRE occupe environ 1,5 Go. Sur un ordinateur de 8 Go ou moins, lancer avec `MAVEN_OPTS=-Xmx3g mvn -q -pl retine-plugin exec:java`.
+Mémoire : une paire FIRE occupe environ 1,5 Go. Sur un ordinateur de 8 Go ou moins, lancer avec `MAVEN_OPTS=-Xmx3g mvn -q -o -pl retine-plugin exec:java`.
+
+Pourquoi `-o` : sans lui, Maven vérifie en ligne, à chaque lancement, le plugin `exec` et les versions SNAPSHOT du projet. Avec une connexion lente ou coupée, il reste bloqué sans message et la fenêtre ne s'ouvre jamais. Hors-ligne, il utilise ce qui est déjà téléchargé (il faut donc avoir fait un premier `mvn install` avec Internet).
 
 Le visualiseur existe aussi dans Fiji : **Plugins › RDR › Visualiseur**. Les algorithmes et leurs paramètres sont expliqués dans [`Docs/algorithmes.md`](Docs/algorithmes.md).
 
@@ -253,6 +255,7 @@ Les réglages du prétraitement et de la segmentation sont dans [`config/defaut.
 | `NoClassDefFoundError: Jama` | Copier `jama-1.0.3.jar` dans `Fiji.app/jars/` |
 | Images FIRE introuvables, menu « paire FIRE » vide | Vérifier le chemin `Donnees/FIRE/FIRE/FIRE/Images/` ; lancer le visualiseur depuis la racine du dépôt |
 | Vaisseau bien visible mais sans masque (réponse nulle à l'étape « Réponse ») | Aplati par l'écrêtage : vérifier que `segmentation.rayonEcretage` n'est pas à 0 (voir `Docs/algorithmes.md`, section 9.5) |
+| `mvn … exec:java` ne rend pas la main, aucune fenêtre, aucun message | Maven attend le réseau : interrompre (Ctrl+C) et relancer avec `-o` (`mvn -q -o -pl retine-plugin exec:java`) |
 | `OutOfMemoryError` dans le visualiseur | Lancer avec `MAVEN_OPTS=-Xmx3g` (une paire FIRE occupe environ 1,5 Go) |
 
 ## Valorisation
