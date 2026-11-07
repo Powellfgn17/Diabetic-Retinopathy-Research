@@ -11,5 +11,7 @@
     "percentileHaut": 94.0,
     "percentileBas": 88.0,
     "aireMin": 150
-  }
+  },
+  "bifurcations": { "longueurElagage": 12, "distanceFusion": 3, "distanceCroisement": 8, "aireBoucle": 400 },
+  "zernike": { "rayon": 48, "ordre": 4 }
 }

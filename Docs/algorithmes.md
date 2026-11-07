@@ -37,8 +37,8 @@ Ce document est à mettre à jour à chaque étape codée.
 
 9. [Segmentation des vaisseaux (Hessien)](#9-segmentation-des-vaisseaux-hessien--codé) ✅
 10. [Squelette (Zhang-Suen)](#10-squelette-zhang-suen--codé) ✅
-11. [Bifurcations et croisements](#11-bifurcations-et-croisements--point-2) 🔨
-12. [Descripteur de Zernike](#12-descripteur-de-zernike--point-2) 🔨
+11. [Bifurcations et croisements](#11-bifurcations-et-croisements--codé) ✅
+12. [Descripteur de Zernike](#12-descripteur-de-zernike--codé) ✅
 
 **Partie C — Aligner les deux visites**
 
@@ -763,10 +763,10 @@ Aucun. Mais **la qualité du squelette dépend entièrement de la segmentation**
 
 ---
 
-## 11. Bifurcations et croisements 🔨 Point 2
+## 11. Bifurcations et croisements ✅ Codé
 
-**Classe prévue :** `bifurcation/DetecteurBifurcations` (Elnis)
-**Entrée :** squelette · **Sortie :** liste de points `(x, y, type)`
+**Classe :** `bifurcation/DetecteurBifurcations` (codée le 07/11 ; tâche d'Elnis dans le plan)
+**Entrée :** squelette + masque du champ de vue · **Sortie :** liste de points `(x, y, type)`
 
 ### 11.1 Le nombre de croisements (crossing number)
 
@@ -784,38 +784,91 @@ CN = ½ × Σ |Pi − Pi+1|      pour i = 1 à 8
 | **3** | **bifurcation** (le vaisseau se sépare en deux) |
 | **4** | **croisement** (deux vaisseaux se croisent) |
 
-### 11.2 Nettoyage, dans l'ordre
+### 11.2 Les étapes, dans l'ordre du code
 
-| Étape | Pourquoi | Paramètre (départ sur FIRE) |
+| Étape | Pourquoi | Paramètre (px FIRE) |
 | --- | --- | --- |
-| Fusionner les détections voisines | Au même endroit, le squelette peut donner 2 ou 3 pixels avec CN = 3 | distance de fusion *(proposition : 3 px)* |
-| **Élaguer** les petites branches | Une barbe crée une branche courte terminée par une extrémité : on la supprime | **12 px** |
-| Regrouper deux bifurcations très proches en **un croisement** | Un croisement de deux vaisseaux apparaît souvent dans le squelette comme deux bifurcations décalées | **8 px** |
-| Écarter les points trop près du bord | Leur fenêtre de Zernike sortirait du champ de vue | rayon R de Zernike |
+| 1. **Remplir les petites boucles**, puis recalculer le squelette | Un trou dans un vaisseau du masque (fréquent près du disque) devient une boucle, donc **deux fausses bifurcations**. Les zones entourées par le squelette de moins de 400 px sont bouchées : la boucle redevient une ligne. | `bifurcations.aireBoucle` = **400** |
+| 2. **Élaguer** les branches courtes | Une barbe crée une branche courte terminée par une extrémité : depuis chaque extrémité, on suit la branche ; si elle atteint une jonction en moins de 12 px, on la retire. Jusqu'à 3 passes (une barbe fourchue disparaît en deux fois). | `bifurcations.longueurElagage` = **12** |
+| 3. **Détecter** | Pixels du squelette élagué avec CN ≥ 3 | — |
+| 4. **Fusionner** les détections voisines | Au même endroit, le squelette donne souvent 2 ou 3 pixels avec CN = 3 : ils deviennent un seul point, au centre de leurs pixels | `bifurcations.distanceFusion` = **3** |
+| 5. **Typer** en comptant les branches | On compte les branches qui sortent d'un petit carré autour du point (seulement celles qui lui sont reliées) : 3 = bifurcation, 4 ou plus = croisement, 2 ou moins = artefact écarté | — |
+| 6. **Regrouper** deux bifurcations proches en **un croisement** | Un croisement apparaît souvent comme deux bifurcations décalées. Deux bifurcations à moins de 8 px sont remplacées par leur milieu si 4 branches en sortent (3 : une seule bifurcation ; 2 : une boucle, écartée) | `bifurcations.distanceCroisement` = **8** |
+| 7. **Écarter les points trop près du bord** | Leur fenêtre de Zernike sortirait du champ de vue | `zernike.rayon` = **48** |
+
+Toutes les longueurs sont multipliées par `segmentation.facteurEchelle` (et les aires par
+son carré) pour un autre jeu que FIRE.
 
 ### 11.3 Impact des paramètres
 
 | Paramètre | Trop petit | Trop grand |
 | --- | --- | --- |
 | Longueur d'élagage (12 px) | Les barbes restent : fausses bifurcations | On coupe de vraies petites branches : vraies bifurcations perdues |
-| Distance de croisement (8 px) | Un croisement compte pour deux bifurcations | Deux vraies bifurcations voisines sont fusionnées en un faux croisement |
+| Aire des boucles (400 px) | Les boucles autour des trous du masque restent : paires de fausses bifurcations | De vraies boucles (deux vaisseaux qui se croisent deux fois de près) sont effacées |
+| Distance de croisement (8 px) | Un croisement compte pour deux bifurcations | Deux vraies bifurcations voisines deviennent un faux croisement |
 
-### 11.4 Test de stabilité
+**Limite connue :** quand deux vaisseaux larges se croisent sous un angle aigu, les deux
+jonctions du squelette sont plus éloignées que 8 px (16 px pour deux vaisseaux de 7 px à
+30°, mesuré par un test). Le croisement reste alors deux bifurcations proches.
 
-Tourner une image de 30°, relancer toute la chaîne, et compter les bifurcations retrouvées
-à moins de 3 px de leur position attendue. **Objectif : au moins 80 %.** Sinon, corriger le
-squelette et l'élagage avant de passer au descripteur.
+### 11.4 Tests (15, tous verts)
 
-### 11.5 Sortie
+Formes épaisses dessinées, squelettisées par Zhang-Suen, puis détectées : un Y donne une
+bifurcation au centre ; un Y à 30° aussi ; une croix donne un croisement ; une croix à 60°
+(éclatée en deux jonctions par le squelette) donne un seul croisement ; une barbe de 6 px est
+élaguée sans couper la ligne, une vraie branche de 60 px est gardée ; un trou dans un
+vaisseau ne donne aucun point (et deux sans le remplissage) ; une grande boucle garde ses deux
+bifurcations ; deux vaisseaux parallèles proches ne donnent rien ; le bord écarte bien les
+points ; coordonnées au centre du pixel (D1) ; CN sur des cas connus ; entrée non modifiée ;
+format CSV.
 
-Fichier `bifurcations/<paire>_<visite>.csv` avec les colonnes `x, y, type`, coordonnées
-selon D1 (centre du pixel à +0,5), dans `resultats/point2/` (décision D6).
+### 11.5 Test de stabilité (rotation de 30°) ⚠ objectif de 3 px non atteint
+
+Protocole : tourner l'image de 30° (interpolation bilinéaire), relancer **toute** la chaîne,
+compter les bifurcations retrouvées près de leur position attendue. **Objectif : au moins
+80 % à moins de 3 px.** Mesuré le 07/11/2026 :
+
+| Image | Points | Retrouvés à ≤ 3 px | à ≤ 5 px | à ≤ 10 px | Distance médiane |
+| --- | --- | --- | --- | --- | --- |
+| S01_1 | 200 | **67,5 %** | 86,5 % | 89,5 % | 2,3 px |
+| P30_2 | 177 | **59,9 %** | 72,9 % | — | 2,0 px |
+| A01_1 | 258 | **59,3 %** | 78,3 % | — | 2,2 px |
+
+Presque tous les points retrouvés sont du même type (bifurcation ou croisement).
+
+**Lecture :** à 0° (contrôle), 100 % des points sont retrouvés. Après rotation, environ 9
+points sur 10 sont **bien détectés** (à 10 px près), mais leur **position** varie de 2 px
+en médiane : l'image tournée est rééchantillonnée, le masque des vaisseaux bouge d'un ou
+deux pixels, et le squelette avec. Le décalage moyen est nul (pas de biais de la mesure).
+
+**Essayé, sans gain :** placer le point à l'intersection des droites ajustées sur les
+branches (entre 4 et 15 px du point). La médiane baisse un peu (2,1 px au lieu de 2,3) mais
+les erreurs fortes augmentent : 60 % à 3 px au lieu de 67 % sur S01. Retiré.
+
+**À décider en groupe :** garder 3 px (et chercher un meilleur positionnement), ou juger le
+critère sur 5 px. Pour la suite, l'appariement compte : le descripteur, lui, reconnaît bien
+les mêmes points après rotation (section 12.6).
+
+### 11.6 Ce qu'il donne sur FIRE
+
+Environ **200 points par image** (S01_1 : 187 bifurcations, 13 croisements, 7 écartés au
+bord ; P30_2 : 168 et 9). Temps : 0,4 s (élagage compris).
+
+Dans le visualiseur : étapes « Bifurcations : squelette élagué » et « Bifurcations et
+croisements » (anneau bleu = bifurcation, orange = croisement).
+
+### 11.7 Sortie
+
+Fichier `bifurcations/<paire>_<visite>.csv` avec les colonnes `x, y, type` (`bifurcation` ou
+`croisement`), coordonnées selon D1 (centre du pixel à +0,5), point décimal
+(`Bifurcation.ecrireCsv`). Le bouton « Exporter les étapes… » du visualiseur les écrit pour
+les deux visites. Destination prévue : `resultats/point2/` (décision D6).
 
 ---
 
-## 12. Descripteur de Zernike 🔨 Point 2
+## 12. Descripteur de Zernike ✅ Codé
 
-**Classe prévue :** descripteur de Zernike (Powell)
+**Classe :** `zernike/DescripteurZernike` (codée le 07/11)
 **Entrée :** image prétraitée + liste de bifurcations · **Sortie :** un vecteur de nombres par bifurcation
 
 ### 12.1 Pourquoi un descripteur
@@ -874,18 +927,56 @@ garde que les modules.**
 Comptage des valeurs : à l'ordre 4, les couples (n, m) sont (1,1), (2,0), (2,2), (3,1),
 (3,3), (4,0), (4,2), (4,4), soit 8 valeurs.
 
-### 12.6 Tests prévus
+Paramètres : `zernike.rayon` (défaut **48** px FIRE, multiplié par `facteurEchelle`) et
+`zernike.ordre` (défaut **4**).
 
-- Fenêtre tournée de 30° et de 45° : **écart inférieur à 5 %** entre les descripteurs.
-- Reconstruction d'une petite image à partir de ses moments : l'erreur doit **baisser
-  quand l'ordre monte** (preuve que les moments sont bien calculés).
+### 12.6 Tests et mesures
+
+**Tests (8, tous verts) :**
+
+| Test | Résultat |
+| --- | --- |
+| Fenêtre tournée de 30° et 45° (motif lisse en Y), écart < 5 % | écart de **0,4 à 1,2 %** à l'ordre 4, **0,6 à 2,3 %** à l'ordre 8 (R = 32 et 48) |
+| Reconstruction de la fenêtre à partir des moments | erreur 0,93 (ordre 2) → 0,84 (4) → 0,64 (8) → 0,46 (12) → **0,33 (16)** : baisse bien avec l'ordre |
+| Luminosité et contraste changés (0,2 + 2,5 × image) | descripteur identique |
+| Fenêtre uniforme | descripteur nul |
+| Une bifurcation contre une simple ligne | descripteurs nettement différents |
+| Polynômes radiaux R(2,0), R(3,1), R(4,0), R(5,5), et R(n,m)(1) = 1 | exacts |
+| Couples (n, m) | 8 à l'ordre 4, 24 à l'ordre 8 |
+
+**Sur une vraie image (FIRE, tournée de 30°).** Pour chaque bifurcation retrouvée, on compare
+son descripteur avant et après rotation (coefficient de corrélation, celui de l'appariement,
+section 13) avec ceux de **toutes** les autres bifurcations :
+
+| Image | R | Ordre | Même point (corrélation médiane) | Points différents (médiane / 90 % en dessous de) | Même point classé 1er |
+| --- | --- | --- | --- | --- | --- |
+| S01_1 | 32 | 4 | 0,986 | 0,657 / 0,897 | 66 % |
+| S01_1 | **48** | 4 | 0,993 | 0,541 / 0,871 | **86 %** |
+| S01_1 | 64 | 4 | 0,995 | 0,378 / 0,826 | **95 %** |
+| S01_1 | 48 | 8 | 0,984 | 0,533 / 0,793 | 91 % |
+| P30_2 | 48 | 4 | 0,993 | 0,437 / 0,834 | 89 % |
+| A01_1 | 48 | 4 | 0,992 | 0,403 / 0,795 | 86 % |
+
+« Classé 1er » : parmi toutes les bifurcations de l'image tournée, celle qui ressemble le
+plus au point de départ est bien la sienne.
+
+**Lecture :** le descripteur d'un même point reste presque identique après rotation (0,99),
+alors que deux points différents se ressemblent beaucoup moins. **Plus R est grand, mieux
+on distingue les points** (la fenêtre contient plus de vaisseaux voisins), au prix de plus
+de points écartés au bord. R = 64 est à confirmer sur de vraies paires (deux visites), où la
+déformation entre visites joue contre les grandes fenêtres.
+
+Temps : 0,3 s pour 200 points (R = 48, ordre 8).
 
 ### 12.7 Sortie
 
-`descripteurs/<paire>_<visite>_R<rayon>.csv` avec les colonnes `x, y, z1 … zk`.
+`descripteurs/<paire>_<visite>_R<rayon>.csv` avec les colonnes `x, y, z1 … zk`
+(`DescripteurZernike.ecrireCsv`), aussi écrit par l'export du visualiseur. Dans le
+visualiseur, l'étape « Zernike : fenêtre autour de chaque point » montre le cercle de rayon R
+autour de chaque point.
 
-**Plan B** si Zernike échoue aux tests le 11/11 : comparer directement les fenêtres par
-corrélation, en l'annonçant comme solution provisoire.
+Le plan B (comparer directement les fenêtres par corrélation) n'est pas nécessaire : les
+tests passent.
 
 ---
 
@@ -1239,10 +1330,12 @@ dont l'erreur maximale reste sous T), avec la marge d'erreur.
 | Segmentation ✅ | `segmentation.percentileHaut` | 94 | % | germes de l'hystérésis | **forte** |
 | Segmentation ✅ | `segmentation.percentileBas` | 88 | % | extension de l'hystérésis | **forte** |
 | Segmentation ✅ | `segmentation.aireMin` | 150 | px FIRE | taille minimale d'un morceau | moyenne |
-| Bifurcations 🔨 | longueur d'élagage | 12 | px FIRE | supprime les barbes | forte |
-| Bifurcations 🔨 | distance de croisement | 8 | px FIRE | fusionne deux bifurcations en croisement | moyenne |
-| Zernike 🔨 | ordre maximal | 4 (puis 8) | — | finesse du descripteur | moyenne |
-| Zernike 🔨 | rayon R | 32 / 48 / 64 | px FIRE | taille de la fenêtre | **forte** |
+| Bifurcations ✅ | `bifurcations.longueurElagage` | 12 | px FIRE | supprime les barbes | forte |
+| Bifurcations ✅ | `bifurcations.aireBoucle` | 400 | px FIRE | remplit les petites boucles | moyenne |
+| Bifurcations ✅ | `bifurcations.distanceFusion` | 3 | px FIRE | regroupe les pixels jonctions | faible |
+| Bifurcations ✅ | `bifurcations.distanceCroisement` | 8 | px FIRE | fusionne deux bifurcations en croisement | moyenne |
+| Zernike ✅ | `zernike.ordre` | 4 (puis 8) | — | finesse du descripteur | moyenne |
+| Zernike ✅ | `zernike.rayon` | 48 (32 / 48 / 64 à comparer) | px FIRE | taille de la fenêtre ; aussi la marge au bord des bifurcations | **forte** |
 | Appariement 🔨 | seuil de score | à l'EER | corrélation | accepte ou rejette un couple | **forte** |
 | RANSAC 📅 | seuil d'accord | *5–10* | px | tolérance d'un inlier | forte |
 | RANSAC 📅 | nombre d'essais | *1000* | — | sûreté du vote | faible |

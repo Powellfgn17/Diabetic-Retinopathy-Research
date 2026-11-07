@@ -39,6 +39,13 @@ public final class Parametres {
 		DEFAUTS.put("segmentation.percentileHaut", 94.0);
 		DEFAUTS.put("segmentation.percentileBas", 88.0);
 		DEFAUTS.put("segmentation.aireMin", 150);
+		// Bifurcations et descripteur (Point 2) — px FIRE, multipliés par segmentation.facteurEchelle
+		DEFAUTS.put("bifurcations.longueurElagage", 12.0);
+		DEFAUTS.put("bifurcations.distanceFusion", 3.0);
+		DEFAUTS.put("bifurcations.distanceCroisement", 8.0);
+		DEFAUTS.put("bifurcations.aireBoucle", 400.0);
+		DEFAUTS.put("zernike.rayon", 48.0);
+		DEFAUTS.put("zernike.ordre", 4);
 	}
 
 	private final JsonObject racine;

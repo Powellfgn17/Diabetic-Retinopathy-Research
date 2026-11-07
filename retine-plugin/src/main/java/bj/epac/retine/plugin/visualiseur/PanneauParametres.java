@@ -86,7 +86,21 @@ final class PanneauParametres extends JPanel {
 			new Def("segmentation.percentileBas", "Seuil bas (%)", Type.REEL, 0, 100, 0.5,
 					"Extension depuis les germes. Plus bas : réseau plus continu, mais plus de barbes."),
 			new Def("segmentation.aireMin", "Aire minimale (px)", Type.ENTIER, 0, 100000, 10,
-					"Retire les morceaux isolés plus petits. Plus haut : masque plus propre, bouts fins perdus."), };
+					"Retire les morceaux isolés plus petits. Plus haut : masque plus propre, bouts fins perdus."),
+			"Bifurcations",
+			new Def("bifurcations.longueurElagage", "Élagage (px)", Type.REEL, 0, 200, 1,
+					"Branches plus courtes retirées (barbes). Plus haut : moins de fausses bifurcations, vraies petites branches perdues."),
+			new Def("bifurcations.aireBoucle", "Aire des boucles (px)", Type.REEL, 0, 100000, 50,
+					"Boucles plus petites remplies (trous dans un vaisseau). 0 = désactivé."),
+			new Def("bifurcations.distanceFusion", "Fusion (px)", Type.REEL, 0, 50, 0.5,
+					"Pixels jonctions plus proches regroupés en un seul point."),
+			new Def("bifurcations.distanceCroisement", "Croisement (px)", Type.REEL, 0, 100, 1,
+					"Deux bifurcations plus proches : un croisement si 4 branches en sortent. Plus haut : vraies bifurcations voisines fusionnées."),
+			"Descripteur de Zernike",
+			new Def("zernike.rayon", "Rayon R (px)", Type.REEL, 1, 500, 4,
+					"Taille de la fenêtre décrite. Plus grand : points mieux distingués, mais plus de points écartés au bord."),
+			new Def("zernike.ordre", "Ordre", Type.ENTIER, 1, 20, 1,
+					"4 : 8 valeurs ; 8 : 24 valeurs. Plus haut : plus fin, mais plus sensible au bruit."), };
 
 	private final Map<String, JComponent> champs = new LinkedHashMap<String, JComponent>();
 	private final Map<String, Def> defs = new LinkedHashMap<String, Def>();
@@ -121,7 +135,7 @@ final class PanneauParametres extends JPanel {
 			if (d.type == Type.LISTE) {
 				champ = new JTextField(10);
 			} else if (d.type == Type.ENTIER) {
-				champ = new JSpinner(new SpinnerNumberModel(0, (int) d.min, (int) d.max, (int) d.pas));
+				champ = new JSpinner(new SpinnerNumberModel((int) d.min, (int) d.min, (int) d.max, (int) d.pas));
 			} else {
 				champ = new JSpinner(new SpinnerNumberModel(d.min, d.min, d.max, d.pas));
 				((JSpinner) champ).setEditor(new JSpinner.NumberEditor((JSpinner) champ, "0.###"));

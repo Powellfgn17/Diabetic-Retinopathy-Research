@@ -98,8 +98,9 @@ Point 1 terminé (16/20, rapport remis le 1er novembre 2026). Point 2 la semaine
 | Segmentation des vaisseaux (Hessien multi-échelle, hystérésis) | `retine-noyau` / `segmentation` | Faite, testée. Écrêtage à la médiane **locale** depuis le 06/11 (les vaisseaux pâles des zones claires étaient aplatis). Dice **0,71** sur les 15 images de réglage HRF (objectif ≥ 0,65), mais seulement **40 % des vaisseaux fins** retrouvés : seuils à choisir en groupe (voir `Docs/algorithmes.md`, section 9.11) |
 | Visualiseur de la chaîne (paire de visites, étape par étape) | `retine-plugin` / `visualiseur` | Fait |
 | Squelette (Zhang-Suen, puis retrait des marches d'escalier) | `retine-noyau` / `squelette` | Fait, testé, visible dans le visualiseur |
-| Bifurcations (nombre de croisements, élagage, fusion) | — | Point 2, en cours (binôme A) |
-| Descripteur de Zernike, appariement | — | Point 2, en cours (binôme A) |
+| Bifurcations et croisements (boucles, élagage, nombre de croisements, fusion, bord) | `retine-noyau` / `bifurcation` | Fait, testé (15 tests), visible dans le visualiseur. Stabilité à 30° : 9 points sur 10 retrouvés, mais à 2 px près en médiane (objectif : 80 % à 3 px, non atteint) |
+| Descripteur de Zernike | `retine-noyau` / `zernike` | Fait, testé (8 tests) ; invariant à la rotation (écart < 2,5 %) |
+| Appariement des bifurcations | — | Point 2, à faire (binôme A) |
 | Lecture des jeux (`JeuFire`, `JeuHrf`), découpage, vérité terrain | `retine-noyau` / `jeux` | Point 2, en cours (binôme B) |
 | Mesures Dice, GM/IM, EER | — | Point 2 (binôme B) |
 | RANSAC, transformation, interpolation, première détection | — | Point 3 |
@@ -115,6 +116,8 @@ Le code est séparé en deux modules Maven pour que les algorithmes restent test
   - `pretraitement/` : une classe par étape (`CanalVert`, `MasqueChampVision`, `CorrectionEclairage`, `RehaussementContraste`, `FiltreMedian`) assemblées par `ChainePretraitement`.
   - `segmentation/` : `SegmentationHessienne` (écrêtage à la médiane locale, Hessien multi-échelle, hystérésis, filtre d'aire).
   - `squelette/` : `AmincissementZhangSuen` (Zhang-Suen, puis retrait des marches d'escalier).
+  - `bifurcation/` : `DetecteurBifurcations` (petites boucles, élagage, nombre de croisements, croisements, bord) et `Bifurcation` (point, CSV `x,y,type`).
+  - `zernike/` : `DescripteurZernike` (modules des moments de Zernike d'une fenêtre ronde, CSV `x,y,z1…zk`).
   - `chaine/` : interface `Etape`, `ContexteExecution`, et `Observateur`, prévenu après chaque étape (sert au visualiseur et aux figures).
   - `parametres/` : lecture de `config/defaut.json`.
   - `jeux/` : accès aux données (`JeuFire`, `PaireImages`).
@@ -196,7 +199,7 @@ Commandes utiles :
 
 ### Visualiser la chaîne étape par étape
 
-Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (18 étapes, jusqu'au squelette, environ 20 s pour une paire FIRE). Depuis la racine du dépôt :
+Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (21 étapes, jusqu'aux bifurcations et aux fenêtres de Zernike, environ 22 s pour une paire FIRE). Depuis la racine du dépôt :
 
 ```bash
 mvn -q install -DskipTests          # une fois, puis après chaque modification du code
@@ -210,7 +213,7 @@ Pour charger une paire : choisir un identifiant dans **« paire FIRE »** (A01, 
 - **Liste à gauche** : les étapes dans l'ordre, avec leur durée pour chaque visite ; flèches ↑ ↓ pour passer de l'une à l'autre ; en dessous, ce que montre l'étape et les paramètres qui la règlent.
 - **Image** : molette pour zoomer autour du curseur, glisser pour se déplacer, double-clic pour tout voir ; la barre du bas donne la position et la valeur du pixel sous la souris.
 - **Paramètres à droite**, communs aux deux visites : modifier une valeur puis « Relancer » ; le zoom et l'étape affichée sont conservés ; survoler un paramètre affiche son effet ; « Enregistrer… » sauve un JSON réutilisable.
-- **Exporter les étapes…** : toutes les images des deux visites en PNG pleine résolution (`v1_…`, `v2_…`), avec les paramètres utilisés, dans `executions/<date>-visualiseur-<paire>/`.
+- **Exporter les étapes…** : toutes les images des deux visites en PNG pleine résolution (`v1_…`, `v2_…`), les paramètres utilisés, et les CSV d'échange D6 (`bifurcations/<paire>_<visite>.csv`, `descripteurs/<paire>_<visite>_R<rayon>.csv`), dans `executions/<date>-visualiseur-<paire>/`.
 
 Mémoire : une paire FIRE occupe environ 1,5 Go. Sur un ordinateur de 8 Go ou moins, lancer avec `MAVEN_OPTS=-Xmx3g mvn -q -pl retine-plugin exec:java`.
 

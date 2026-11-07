@@ -160,7 +160,7 @@ public final class AmincissementZhangSuen implements Etape<Masque, Masque> {
 	 * Retire en place, un par un dans l'ordre de lecture, les pixels simples qui ne sont pas
 	 * des extrémités, jusqu'à ce que plus aucun ne le soit.
 	 */
-	static void retirerMarches(boolean[] v, int l, int h) {
+	public static void retirerMarches(boolean[] v, int l, int h) {
 		boolean change = true;
 		while (change) {
 			change = false;

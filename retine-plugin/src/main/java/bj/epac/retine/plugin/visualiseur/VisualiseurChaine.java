@@ -66,6 +66,9 @@ import bj.epac.retine.plugin.AdaptateurImageJ;
 import bj.epac.retine.pretraitement.ChainePretraitement;
 import bj.epac.retine.segmentation.SegmentationHessienne;
 import bj.epac.retine.squelette.AmincissementZhangSuen;
+import bj.epac.retine.zernike.DescripteurZernike;
+import bj.epac.retine.bifurcation.Bifurcation;
+import bj.epac.retine.bifurcation.DetecteurBifurcations;
 import ij.IJ;
 import ij.ImagePlus;
 import ij.process.ImageConverter;
@@ -135,6 +138,13 @@ public final class VisualiseurChaine extends JFrame {
 	private final JCheckBox suivre = new JCheckBox("Suivre en direct", true);
 	private final JButton relancer = new JButton("▶ Relancer avec ces paramètres");
 	private final JButton exporter = new JButton("Exporter les étapes…");
+
+	/** Noms des étapes publiées directement par le visualiseur (points, fenêtres). */
+	static final String POINTS = "Bifurcations et croisements";
+	static final String FENETRES = "Zernike : fenêtre autour de chaque point";
+
+	/** Résultats du dernier calcul, par visite, pour l'export CSV (D6). */
+	private final Object[][] resultatsVisites = new Object[2][];
 	private final PanneauParametres parametres = new PanneauParametres();
 	private final JLabel etatPixel = new JLabel(" ");
 	private final JLabel resume = new JLabel(" ");
@@ -419,6 +429,8 @@ public final class VisualiseurChaine extends JFrame {
 		etapes.clear();
 		modeleAvant.removeAllElements();
 		parametresDuCalcul = json;
+		resultatsVisites[0] = null;
+		resultatsVisites[1] = null;
 		calculEnCours = true;
 		relancer.setEnabled(false);
 		exporter.setEnabled(false);
@@ -505,9 +517,18 @@ public final class VisualiseurChaine extends JFrame {
 				ChainePretraitement.Resultat pr = new ChainePretraitement().executer(c, ctx, obs);
 				SegmentationHessienne.Resultat s = new SegmentationHessienne().segmenter(pr.pretraitee(), ctx, obs);
 				Masque squelette = new AmincissementZhangSuen().executer(s.vaisseaux(), ctx, obs);
-				return String.format(Locale.FRANCE, "%s : vaisseaux %.1f %% du champ, squelette %d px", COURT[visite],
-						100.0 * s.vaisseaux().nombrePixelsActifs() / pr.masque().nombrePixelsActifs(),
-						squelette.nombrePixelsActifs());
+				DetecteurBifurcations.Resultat b = new DetecteurBifurcations().detecter(squelette, pr.masque(), ctx, obs);
+				publier(EtapeVisible.points(++numero, POINTS, dernierFond, b.elague(), b.points(), 0, ecoule()));
+				List<DescripteurZernike.Descripteur> d = new DescripteurZernike().decrire(pr.pretraitee().image(),
+						b.points(), ctx);
+				double rayon = params.reel("zernike.rayon") * params.reel("segmentation.facteurEchelle");
+				publier(EtapeVisible.points(++numero, FENETRES, dernierFond, b.elague(), b.points(), rayon, ecoule()));
+				resultatsVisites[visite] = new Object[] { b.points(), d, rayon };
+				long croisements = b.points().stream().filter(p -> p.type() == Bifurcation.Type.CROISEMENT).count();
+				return String.format(Locale.FRANCE,
+						"%s : vaisseaux %.1f %% du champ, %d bifurcations, %d croisements (%d écartés au bord)",
+						COURT[visite], 100.0 * s.vaisseaux().nombrePixelsActifs() / pr.masque().nombrePixelsActifs(),
+						b.points().size() - croisements, croisements, b.ecartesAuBord());
 			}
 
 			private EtapeVisible convertir(String nom, ImageGris img, Masque masque) {
@@ -522,7 +543,8 @@ public final class VisualiseurChaine extends JFrame {
 				if (SegmentationHessienne.HYSTERESIS.equals(nom)) {
 					return EtapeVisible.superpose(n, nom, dernierFond, masque, new Color(255, 190, 0), s);
 				}
-				if (AmincissementZhangSuen.ZHANG_SUEN.equals(nom) || AmincissementZhangSuen.MARCHES.equals(nom)) {
+				if (AmincissementZhangSuen.ZHANG_SUEN.equals(nom) || AmincissementZhangSuen.MARCHES.equals(nom)
+						|| DetecteurBifurcations.ELAGAGE.equals(nom)) {
 					return EtapeVisible.squelette(n, nom, dernierFond, derniersVaisseaux, masque, s);
 				}
 				if (SegmentationHessienne.VAISSEAUX.equals(nom)) {
@@ -714,6 +736,8 @@ public final class VisualiseurChaine extends JFrame {
 			}
 		}
 		String json = new GsonBuilder().setPrettyPrinting().create().toJson(parametresDuCalcul);
+		Object[][] resultats = { resultatsVisites[0], resultatsVisites[1] };
+		Path[] sources = fichiers.clone();
 		String texteResume = "Visite 1 : " + fichiers[0] + "\nVisite 2 : " + (fichiers[1] != null ? fichiers[1] : "—")
 				+ "\n" + resume.getText() + "\n";
 		exporter.setEnabled(false);
@@ -725,6 +749,20 @@ public final class VisualiseurChaine extends JFrame {
 					ImageIO.write(((EtapeVisible) o[1]).rendu(), "png", dossier.resolve((String) o[0]).toFile());
 				}
 				Files.write(dossier.resolve("parametres_utilises.json"), json.getBytes(StandardCharsets.UTF_8));
+				for (int k = 0; k < 2; k++) {
+					if (resultats[k] == null || sources[k] == null) {
+						continue;
+					}
+					// format d'échange D6 : <paire>_<visite>.csv (ex. A01_1), comme le nom de l'image FIRE
+					String base = sources[k].getFileName().toString().replaceFirst("\\.[^.]+$", "");
+					@SuppressWarnings("unchecked")
+					List<Bifurcation> pts = (List<Bifurcation>) resultats[k][0];
+					@SuppressWarnings("unchecked")
+					List<DescripteurZernike.Descripteur> desc = (List<DescripteurZernike.Descripteur>) resultats[k][1];
+					long r = Math.round((Double) resultats[k][2]);
+					Bifurcation.ecrireCsv(dossier.resolve("bifurcations").resolve(base + ".csv"), pts);
+					DescripteurZernike.ecrireCsv(dossier.resolve("descripteurs").resolve(base + "_R" + r + ".csv"), desc);
+				}
 				Files.write(dossier.resolve("resume.txt"), texteResume.getBytes(StandardCharsets.UTF_8));
 				return null;
 			}
@@ -735,7 +773,8 @@ public final class VisualiseurChaine extends JFrame {
 				try {
 					get();
 					JOptionPane.showMessageDialog(VisualiseurChaine.this,
-							aEcrire.size() + " images et les paramètres enregistrés dans\n" + dossier.toAbsolutePath(),
+							aEcrire.size() + " images, les paramètres et les CSV (bifurcations, descripteurs)"
+									+ " enregistrés dans\n" + dossier.toAbsolutePath(),
 							"Export terminé", JOptionPane.INFORMATION_MESSAGE);
 				} catch (Exception e) {
 					erreur("Export impossible : " + e.getMessage());

@@ -1,5 +1,6 @@
 package bj.epac.retine.plugin.visualiseur;
 
+import bj.epac.retine.bifurcation.DetecteurBifurcations;
 import bj.epac.retine.pretraitement.ChainePretraitement;
 import bj.epac.retine.segmentation.SegmentationHessienne;
 import bj.epac.retine.squelette.AmincissementZhangSuen;
@@ -117,6 +118,38 @@ final class Explications {
 					+ "À vérifier : les petites branches courtes le long des vaisseaux viennent des barbes du "
 					+ "masque ; l'élagage (12 px) les retirera. Une boucle signale un trou dans un vaisseau du "
 					+ "masque.";
+		}
+		if (DetecteurBifurcations.ELAGAGE.equals(nom)) {
+			return "Le squelette nettoyé avant de chercher les bifurcations.\n\n"
+					+ "1. Petites boucles remplies : un trou dans un vaisseau du masque fait une boucle, donc deux "
+					+ "fausses bifurcations. Les zones entourées de moins de 400 px sont bouchées, puis le squelette "
+					+ "est recalculé.\n"
+					+ "2. Élagage : chaque branche qui part d'une extrémité et atteint une jonction en moins de "
+					+ "12 px est une barbe ; elle est retirée (jusqu'à 3 passes, pour les barbes fourchues).\n\n"
+					+ "Comparez avec l'étape précédente (« Avant | après ») : les petites pointes le long des "
+					+ "vaisseaux ont disparu.\n\n"
+					+ "Paramètres : longueur d'élagage (12 px), aire des boucles (400 px).";
+		}
+		if (VisualiseurChaine.POINTS.equals(nom)) {
+			return "Anneau bleu : bifurcation (un vaisseau se sépare en deux). Anneau orange : croisement "
+					+ "(deux vaisseaux se croisent). La barre du bas donne le point le plus proche de la souris.\n\n"
+					+ "Détection : nombre de croisements CN ≥ 3 sur le squelette élagué ; les pixels jonctions "
+					+ "à moins de 3 px sont fusionnés ; le type vient du nombre de branches qui sortent d'un petit "
+					+ "carré autour du point (3 = bifurcation, 4 = croisement). Deux bifurcations à moins de 8 px "
+					+ "deviennent un croisement si 4 branches en sortent.\n\n"
+					+ "Les points trop près du bord (fenêtre de Zernike hors du champ) sont écartés.\n\n"
+					+ "Sur FIRE : environ 200 points par image. Après une rotation de 30°, 90 % sont retrouvés, "
+					+ "à 2 px près en moyenne.\n\n"
+					+ "Paramètres : fusion (3 px), croisement (8 px).";
+		}
+		if (VisualiseurChaine.FENETRES.equals(nom)) {
+			return "Cercle vert : la fenêtre ronde que décrit le descripteur de Zernike, de rayon R = 48 px.\n\n"
+					+ "Pour chaque point, la fenêtre de l'image prétraitée est normalisée (moyenne 0, écart-type 1), "
+					+ "puis décomposée sur les polynômes de Zernike ; on garde les modules |Z(n,m)|, qui ne changent "
+					+ "pas si l'œil tourne. Ordre 4 : 8 valeurs par point.\n\n"
+					+ "Mesuré sur FIRE S01 tourné de 30° : le même point est reconnu en premier parmi tous les autres "
+					+ "dans 66 % des cas avec R = 32, 86 % avec R = 48, 95 % avec R = 64.\n\n"
+					+ "Paramètres : rayon R, ordre.";
 		}
 		return "";
 	}
