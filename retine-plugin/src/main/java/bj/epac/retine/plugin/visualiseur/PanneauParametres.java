@@ -100,7 +100,10 @@ final class PanneauParametres extends JPanel {
 			new Def("zernike.rayon", "Rayon R (px)", Type.REEL, 1, 500, 4,
 					"Taille de la fenêtre décrite. Plus grand : points mieux distingués, mais plus de points écartés au bord."),
 			new Def("zernike.ordre", "Ordre", Type.ENTIER, 1, 20, 1,
-					"4 : 8 valeurs ; 8 : 24 valeurs. Plus haut : plus fin, mais plus sensible au bruit."), };
+					"4 : 8 valeurs ; 8 : 24 valeurs. Plus haut : plus fin, mais plus sensible au bruit."),
+			"Appariement",
+			new Def("appariement.seuil", "Seuil de score", Type.REEL, -1, 1, 0.01,
+					"Couples mutuels de score plus bas écartés. Plus haut : moins de faux couples, mais moins de couples."), };
 
 	private final Map<String, JComponent> champs = new LinkedHashMap<String, JComponent>();
 	private final Map<String, Def> defs = new LinkedHashMap<String, Def>();

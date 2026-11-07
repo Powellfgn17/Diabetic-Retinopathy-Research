@@ -42,9 +42,9 @@ public final class DescripteurZernike {
 		private final Bifurcation point;
 		private final double[] valeurs;
 
-		Descripteur(Bifurcation point, double[] valeurs) {
+		public Descripteur(Bifurcation point, double[] valeurs) {
 			this.point = point;
-			this.valeurs = valeurs;
+			this.valeurs = valeurs.clone();
 		}
 
 		public Bifurcation point() {

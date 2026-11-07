@@ -100,7 +100,7 @@ Point 1 terminé (16/20, rapport remis le 1er novembre 2026). Point 2 la semaine
 | Squelette (Zhang-Suen, puis retrait des marches d'escalier) | `retine-noyau` / `squelette` | Fait, testé, visible dans le visualiseur |
 | Bifurcations et croisements (boucles, élagage, nombre de croisements, fusion, bord) | `retine-noyau` / `bifurcation` | Fait, testé (15 tests), visible dans le visualiseur. Stabilité à 30° : 9 points sur 10 retrouvés, mais à 2 px près en médiane (objectif : 80 % à 3 px, non atteint) |
 | Descripteur de Zernike | `retine-noyau` / `zernike` | Fait, testé (8 tests) ; invariant à la rotation (écart < 2,5 %) |
-| Appariement des bifurcations | — | Point 2, à faire (binôme A) |
+| Appariement des bifurcations (corrélation, choix mutuel, seuil) | `retine-noyau` / `appariement` | Fait, testé (11 tests). Sur les 18 paires S de réglage : 18 / 18 avec au moins 6 bons couples (objectif : 70 %). Seuil 0,90 provisoire, en attendant l'EER (binôme B) |
 | Lecture des jeux (`JeuFire`, `JeuHrf`), découpage, vérité terrain | `retine-noyau` / `jeux` | Point 2, en cours (binôme B) |
 | Mesures Dice, GM/IM, EER | — | Point 2 (binôme B) |
 | RANSAC, transformation, interpolation, première détection | — | Point 3 |
@@ -118,6 +118,7 @@ Le code est séparé en deux modules Maven pour que les algorithmes restent test
   - `squelette/` : `AmincissementZhangSuen` (Zhang-Suen, puis retrait des marches d'escalier).
   - `bifurcation/` : `DetecteurBifurcations` (petites boucles, élagage, nombre de croisements, croisements, bord) et `Bifurcation` (point, CSV `x,y,type`).
   - `zernike/` : `DescripteurZernike` (modules des moments de Zernike d'une fenêtre ronde, CSV `x,y,z1…zk`).
+  - `appariement/` : `ApparieurCorrelation` (corrélation des descripteurs, choix mutuel, seuil ; CSV `x_ref,y_ref,x_suivi,y_suivi,score`).
   - `chaine/` : interface `Etape`, `ContexteExecution`, et `Observateur`, prévenu après chaque étape (sert au visualiseur et aux figures).
   - `parametres/` : lecture de `config/defaut.json`.
   - `jeux/` : accès aux données (`JeuFire`, `PaireImages`).
@@ -199,7 +200,7 @@ Commandes utiles :
 
 ### Visualiser la chaîne étape par étape
 
-Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (21 étapes, jusqu'aux bifurcations et aux fenêtres de Zernike, environ 22 s pour une paire FIRE). Depuis la racine du dépôt :
+Le visualiseur charge **les deux visites d'un même œil** (visite 1 = référence, visite 2 = suivi), les fait passer par le prétraitement et la segmentation en même temps, et affiche **chaque étape au moment où elle est calculée** (22 étapes, jusqu'à l'appariement des bifurcations des deux visites, environ 28 s pour une paire FIRE). Depuis la racine du dépôt :
 
 ```bash
 mvn -q install -DskipTests          # une fois, puis après chaque modification du code
@@ -213,7 +214,7 @@ Pour charger une paire : choisir un identifiant dans **« paire FIRE »** (A01, 
 - **Liste à gauche** : les étapes dans l'ordre, avec leur durée pour chaque visite ; flèches ↑ ↓ pour passer de l'une à l'autre ; en dessous, ce que montre l'étape et les paramètres qui la règlent.
 - **Image** : molette pour zoomer autour du curseur, glisser pour se déplacer, double-clic pour tout voir ; la barre du bas donne la position et la valeur du pixel sous la souris.
 - **Paramètres à droite**, communs aux deux visites : modifier une valeur puis « Relancer » ; le zoom et l'étape affichée sont conservés ; survoler un paramètre affiche son effet ; « Enregistrer… » sauve un JSON réutilisable.
-- **Exporter les étapes…** : toutes les images des deux visites en PNG pleine résolution (`v1_…`, `v2_…`), les paramètres utilisés, et les CSV d'échange D6 (`bifurcations/<paire>_<visite>.csv`, `descripteurs/<paire>_<visite>_R<rayon>.csv`), dans `executions/<date>-visualiseur-<paire>/`.
+- **Exporter les étapes…** : toutes les images des deux visites en PNG pleine résolution (`v1_…`, `v2_…`), les paramètres utilisés, et les CSV d'échange D6 (`bifurcations/<paire>_<visite>.csv`, `descripteurs/<paire>_<visite>_R<rayon>.csv`, `appariements/<paire>.csv`), dans `executions/<date>-visualiseur-<paire>/`.
 
 Mémoire : une paire FIRE occupe environ 1,5 Go. Sur un ordinateur de 8 Go ou moins, lancer avec `MAVEN_OPTS=-Xmx3g mvn -q -o -pl retine-plugin exec:java`.
 

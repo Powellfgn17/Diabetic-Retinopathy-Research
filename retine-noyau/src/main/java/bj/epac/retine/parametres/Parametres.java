@@ -46,6 +46,7 @@ public final class Parametres {
 		DEFAUTS.put("bifurcations.aireBoucle", 400.0);
 		DEFAUTS.put("zernike.rayon", 48.0);
 		DEFAUTS.put("zernike.ordre", 4);
+		DEFAUTS.put("appariement.seuil", 0.9);
 	}
 
 	private final JsonObject racine;

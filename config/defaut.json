@@ -13,5 +13,6 @@
     "aireMin": 150
   },
   "bifurcations": { "longueurElagage": 12, "distanceFusion": 3, "distanceCroisement": 8, "aireBoucle": 400 },
-  "zernike": { "rayon": 48, "ordre": 4 }
+  "zernike": { "rayon": 48, "ordre": 4 },
+  "appariement": { "seuil": 0.9 }
 }

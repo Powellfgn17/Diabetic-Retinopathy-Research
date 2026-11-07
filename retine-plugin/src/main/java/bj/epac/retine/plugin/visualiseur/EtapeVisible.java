@@ -1,6 +1,9 @@
 package bj.epac.retine.plugin.visualiseur;
 
+import java.awt.BasicStroke;
 import java.awt.Color;
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
 import java.awt.image.BufferedImage;
 import java.awt.image.DataBufferByte;
 import java.awt.image.IndexColorModel;
@@ -8,6 +11,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
+import bj.epac.retine.appariement.ApparieurCorrelation;
 import bj.epac.retine.bifurcation.Bifurcation;
 
 import bj.epac.retine.noyau.image.ImageCouleur;
@@ -30,7 +34,9 @@ import bj.epac.retine.noyau.image.Masque;
  * en trait foncé, épaissi à 3 px à l'affichage seulement pour rester visible ;</li>
  * <li>{@link Genre#POINTS} : l'image en gris, le squelette en violet pâle, un anneau bleu
  * autour de chaque bifurcation et orange autour de chaque croisement ; en option, le cercle
- * de la fenêtre de Zernike autour de chaque point.</li>
+ * de la fenêtre de Zernike autour de chaque point ;</li>
+ * <li>{@link Genre#PAIRE} : étape commune aux deux visites (appariement) : les deux images
+ * côte à côte à demi-résolution, un trait par couple apparié. Rendu RGB calculé d'avance.</li>
  * </ul>
  * <p>Sauf l'image d'origine, les rendus sont en 8 bits (gris ou palette) : 4 fois moins de
  * mémoire qu'en RGB, ce qui compte avec deux visites de 2912 × 2912 et 16 étapes.</p>
@@ -38,7 +44,7 @@ import bj.epac.retine.noyau.image.Masque;
 final class EtapeVisible {
 
 	enum Genre {
-		COULEUR, GRIS, CARTE, CHAMP, SUPERPOSE, SQUELETTE, POINTS
+		COULEUR, GRIS, CARTE, CHAMP, SUPERPOSE, SQUELETTE, POINTS, PAIRE
 	}
 
 	private static final double P_BAS = 0.5;
@@ -67,6 +73,9 @@ final class EtapeVisible {
 	/** Pour les points : la liste affichée et le rayon de la fenêtre de Zernike (0 : pas de cercle). */
 	private List<Bifurcation> points = Collections.emptyList();
 	private double rayonFenetre;
+	/** Pour une paire : largeur (en pixels d'origine) d'une visite, et facteur de réduction. */
+	private int largeurVisite;
+	private int reduction = 1;
 	private final double secondes;
 	private final int largeur;
 	private final int hauteur;
@@ -116,6 +125,67 @@ final class EtapeVisible {
 		return new EtapeVisible(numero, nom, Genre.SQUELETTE, null, fond, squelette, vaisseaux, TRAIT_SQUELETTE, secondes);
 	}
 
+	/**
+	 * Étape commune aux deux visites : les deux images prétraitées côte à côte (réduites de
+	 * moitié), un trait par couple, du orange (score bas) au vert (score haut).
+	 */
+	static EtapeVisible appariement(int numero, String nom, ImageGris visite1, ImageGris visite2,
+			List<ApparieurCorrelation.Couple> couples, double seuil, double secondes) {
+		int r = 2;
+		int lv = Math.max(visite1.largeur(), visite2.largeur());
+		int lr = lv / r;
+		int hr = Math.max(visite1.hauteur(), visite2.hauteur()) / r;
+		BufferedImage b = new BufferedImage(2 * lr + 8, hr, BufferedImage.TYPE_INT_RGB);
+		int[] px = new int[b.getWidth() * hr];
+		java.util.Arrays.fill(px, 0xffffff);
+		ImageGris[] v = { visite1, visite2 };
+		for (int k = 0; k < 2; k++) {
+			float[] d = v[k].donneesBrutes();
+			int l = v[k].largeur();
+			double[] bornes = percentiles(d, null);
+			double lo = bornes[0];
+			double hi = bornes[1] > lo ? bornes[1] : lo + 1e-9;
+			for (int y = 0; y < v[k].hauteur() / r; y++) {
+				for (int x = 0; x < l / r; x++) {
+					double m = 0;
+					for (int dy = 0; dy < r; dy++) {
+						for (int dx = 0; dx < r; dx++) {
+							m += d[(y * r + dy) * l + x * r + dx];
+						}
+					}
+					double t = (m / (r * r) - lo) / (hi - lo);
+					int g = (int) Math.round(255 * (t < 0 ? 0 : (t > 1 ? 1 : t)));
+					px[y * b.getWidth() + k * (lr + 8) + x] = g << 16 | g << 8 | g;
+				}
+			}
+		}
+		b.setRGB(0, 0, b.getWidth(), hr, px, 0, b.getWidth());
+		Graphics2D g = b.createGraphics();
+		g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+		g.setStroke(new BasicStroke(2f));
+		for (int i = couples.size() - 1; i >= 0; i--) { // les meilleurs dessinés en dernier, par-dessus
+			ApparieurCorrelation.Couple c = couples.get(i);
+			double t = Math.max(0, Math.min(1, (c.score() - seuil) / Math.max(1e-9, 1 - seuil)));
+			g.setColor(new Color((int) (240 - 200 * t), (int) (130 + 70 * t), (int) (20 + 40 * t)));
+			double x1 = c.reference().x() / r;
+			double y1 = c.reference().y() / r;
+			double x2 = lr + 8 + c.suivi().x() / r;
+			double y2 = c.suivi().y() / r;
+			g.draw(new java.awt.geom.Line2D.Double(x1, y1, x2, y2));
+			g.draw(new java.awt.geom.Ellipse2D.Double(x1 - 5, y1 - 5, 10, 10));
+			g.draw(new java.awt.geom.Ellipse2D.Double(x2 - 5, y2 - 5, 10, 10));
+		}
+		g.dispose();
+		EtapeVisible e = new EtapeVisible(numero, nom, Genre.PAIRE, null, ImageGris.vide(b.getWidth(), hr), null, null,
+				secondes);
+		e.rendu = b;
+		e.largeurVisite = lr + 8;
+		e.reduction = r;
+		e.echelle = String.format(Locale.FRANCE, "%d couples, seuil %.2f ; visite 1 à gauche, visite 2 à droite, "
+				+ "demi-résolution", couples.size(), seuil);
+		return e;
+	}
+
 	static EtapeVisible points(int numero, String nom, ImageGris fond, Masque squelette, List<Bifurcation> points,
 			double rayonFenetre, double secondes) {
 		EtapeVisible e = new EtapeVisible(numero, nom, Genre.POINTS, null, fond, squelette, null, secondes);
@@ -162,6 +232,11 @@ final class EtapeVisible {
 	String valeurA(int x, int y) {
 		if (x < 0 || y < 0 || x >= largeur || y >= hauteur) {
 			return "";
+		}
+		if (genre == Genre.PAIRE) {
+			int k = x < largeurVisite ? 0 : 1;
+			int xv = (x - k * largeurVisite) * reduction;
+			return xv < 0 ? "" : String.format(Locale.FRANCE, "visite %d : x = %d, y = %d", k + 1, xv, y * reduction);
 		}
 		if (genre == Genre.COULEUR) {
 			int c = rendu().getRGB(x, y);

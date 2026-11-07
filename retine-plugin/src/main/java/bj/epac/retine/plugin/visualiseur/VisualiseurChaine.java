@@ -67,6 +67,7 @@ import bj.epac.retine.pretraitement.ChainePretraitement;
 import bj.epac.retine.segmentation.SegmentationHessienne;
 import bj.epac.retine.squelette.AmincissementZhangSuen;
 import bj.epac.retine.zernike.DescripteurZernike;
+import bj.epac.retine.appariement.ApparieurCorrelation;
 import bj.epac.retine.bifurcation.Bifurcation;
 import bj.epac.retine.bifurcation.DetecteurBifurcations;
 import ij.IJ;
@@ -134,7 +135,9 @@ public final class VisualiseurChaine extends JFrame {
 	private final JLabel enteteD = new JLabel();
 	private final JPanel hautG = new JPanel(new BorderLayout(4, 0));
 	private final JLabel avertissement = new JLabel(" ");
-	private final JPanel centre = new JPanel(new GridLayout(1, 2, 6, 0));
+	private final JPanel centre = new JPanel(new GridLayout(1, 0, 6, 0)); // 1 ou 2 colonnes
+	/** Conteneur du panneau de droite, retiré du centre pour une étape commune aux deux visites. */
+	private JPanel conteneurD;
 	private final JCheckBox suivre = new JCheckBox("Suivre en direct", true);
 	private final JButton relancer = new JButton("▶ Relancer avec ces paramètres");
 	private final JButton exporter = new JButton("Exporter les étapes…");
@@ -142,9 +145,12 @@ public final class VisualiseurChaine extends JFrame {
 	/** Noms des étapes publiées directement par le visualiseur (points, fenêtres). */
 	static final String POINTS = "Bifurcations et croisements";
 	static final String FENETRES = "Zernike : fenêtre autour de chaque point";
+	static final String APPARIEMENT = "Appariement des deux visites";
 
 	/** Résultats du dernier calcul, par visite, pour l'export CSV (D6). */
 	private final Object[][] resultatsVisites = new Object[2][];
+	/** Couples du dernier calcul (null si une seule visite), pour l'export CSV. */
+	private volatile List<ApparieurCorrelation.Couple> derniersCouples;
 	private final PanneauParametres parametres = new PanneauParametres();
 	private final JLabel etatPixel = new JLabel(" ");
 	private final JLabel resume = new JLabel(" ");
@@ -431,6 +437,7 @@ public final class VisualiseurChaine extends JFrame {
 		parametresDuCalcul = json;
 		resultatsVisites[0] = null;
 		resultatsVisites[1] = null;
+		derniersCouples = null;
 		calculEnCours = true;
 		relancer.setEnabled(false);
 		exporter.setEnabled(false);
@@ -477,10 +484,32 @@ public final class VisualiseurChaine extends JFrame {
 				for (Future<String> f : res) {
 					t.append(f.get()).append("   ·   ");
 				}
+				if (n == 2 && resultatsVisites[0] != null && resultatsVisites[1] != null) {
+					t.append(apparier()).append("   ·   ");
+				}
 				return t + String.format(Locale.FRANCE, "total %.1f s", (System.nanoTime() - debut) / 1e9);
 			} finally {
 				pool.shutdownNow();
 			}
+		}
+
+		/** Apparie les deux visites et publie l'étape commune ; @return le résumé */
+		@SuppressWarnings("unchecked")
+		private String apparier() {
+			long t0 = System.nanoTime();
+			Parametres p = new Parametres(json.deepCopy());
+			ContexteExecution ctx = new ContexteExecution(p, 42L, Paths.get("executions"));
+			List<ApparieurCorrelation.Couple> couples = new ApparieurCorrelation().apparier(
+					(List<DescripteurZernike.Descripteur>) resultatsVisites[0][1],
+					(List<DescripteurZernike.Descripteur>) resultatsVisites[1][1], ctx);
+			derniersCouples = couples;
+			double seuil = p.reel("appariement.seuil");
+			int numero = Math.max((Integer) resultatsVisites[0][4], (Integer) resultatsVisites[1][4]) + 1;
+			EtapeVisible e = EtapeVisible.appariement(numero, APPARIEMENT, (ImageGris) resultatsVisites[0][3],
+					(ImageGris) resultatsVisites[1][3], couples, seuil, (System.nanoTime() - t0) / 1e9);
+			e.rendu();
+			publish(new Publication(0, e), new Publication(1, e));
+			return String.format(Locale.FRANCE, "%d couples appariés (seuil %.2f)", couples.size(), seuil);
 		}
 
 		/** La chaîne pour une visite : publie chaque étape avec son numéro et sa durée. */
@@ -523,7 +552,7 @@ public final class VisualiseurChaine extends JFrame {
 						b.points(), ctx);
 				double rayon = params.reel("zernike.rayon") * params.reel("segmentation.facteurEchelle");
 				publier(EtapeVisible.points(++numero, FENETRES, dernierFond, b.elague(), b.points(), rayon, ecoule()));
-				resultatsVisites[visite] = new Object[] { b.points(), d, rayon };
+				resultatsVisites[visite] = new Object[] { b.points(), d, rayon, pr.pretraitee().image(), numero };
 				long croisements = b.points().stream().filter(p -> p.type() == Bifurcation.Type.CROISEMENT).count();
 				return String.format(Locale.FRANCE,
 						"%s : vaisseaux %.1f %% du champ, %d bifurcations, %d croisements (%d écartés au bord)",
@@ -653,6 +682,23 @@ public final class VisualiseurChaine extends JFrame {
 			panneauD.afficher(null, "", "");
 			return;
 		}
+		boolean commune = modeAffichage() == 0 && sel != null && sel.visites[0] != null
+				&& sel.visites[0] == sel.visites[1];
+		if (conteneurD != null && commune == (conteneurD.getParent() == centre)) {
+			// étape commune aux deux visites (appariement) : une seule image, sur toute la largeur
+			if (commune) {
+				centre.remove(conteneurD);
+			} else {
+				centre.add(conteneurD);
+			}
+			centre.revalidate();
+			centre.repaint();
+			SwingUtilities.invokeLater(panneauG::ajuster);
+		}
+		if (commune) {
+			panneauG.afficher(sel.visites[0], sel.numero + ". " + sel.nom, "");
+			return;
+		}
 		if (modeAffichage() == 0) {
 			for (int k = 0; k < 2; k++) {
 				PanneauImage p = k == 0 ? panneauG : panneauD;
@@ -694,6 +740,7 @@ public final class VisualiseurChaine extends JFrame {
 		JPanel d = new JPanel(new BorderLayout());
 		d.add(enteteD, BorderLayout.NORTH);
 		d.add(panneauD, BorderLayout.CENTER);
+		conteneurD = d;
 		centre.add(g);
 		centre.add(d);
 		centre.revalidate();
@@ -728,7 +775,7 @@ public final class VisualiseurChaine extends JFrame {
 		for (int i = 0; i < etapes.size(); i++) {
 			EtapePaire e = etapes.get(i);
 			for (int k = 0; k < 2; k++) {
-				if (e.visites[k] != null) {
+				if (e.visites[k] != null && !(k == 1 && e.visites[1] == e.visites[0])) { // étape commune : une fois
 					aEcrire.add(new Object[] {
 							String.format(Locale.ROOT, "v%d_%02d_%s.png", k + 1, e.numero, nomPourFichier(e.nom)),
 							e.visites[k] });
@@ -737,6 +784,7 @@ public final class VisualiseurChaine extends JFrame {
 		}
 		String json = new GsonBuilder().setPrettyPrinting().create().toJson(parametresDuCalcul);
 		Object[][] resultats = { resultatsVisites[0], resultatsVisites[1] };
+		List<ApparieurCorrelation.Couple> couples = derniersCouples;
 		Path[] sources = fichiers.clone();
 		String texteResume = "Visite 1 : " + fichiers[0] + "\nVisite 2 : " + (fichiers[1] != null ? fichiers[1] : "—")
 				+ "\n" + resume.getText() + "\n";
@@ -763,6 +811,10 @@ public final class VisualiseurChaine extends JFrame {
 					Bifurcation.ecrireCsv(dossier.resolve("bifurcations").resolve(base + ".csv"), pts);
 					DescripteurZernike.ecrireCsv(dossier.resolve("descripteurs").resolve(base + "_R" + r + ".csv"), desc);
 				}
+				if (couples != null) {
+					String paire = sources[0].getFileName().toString().replaceFirst("\\.[^.]+$", "").replaceFirst("_1$", "");
+					ApparieurCorrelation.ecrireCsv(dossier.resolve("appariements").resolve(paire + ".csv"), couples);
+				}
 				Files.write(dossier.resolve("resume.txt"), texteResume.getBytes(StandardCharsets.UTF_8));
 				return null;
 			}
@@ -773,7 +825,7 @@ public final class VisualiseurChaine extends JFrame {
 				try {
 					get();
 					JOptionPane.showMessageDialog(VisualiseurChaine.this,
-							aEcrire.size() + " images, les paramètres et les CSV (bifurcations, descripteurs)"
+							aEcrire.size() + " images, les paramètres et les CSV (bifurcations, descripteurs, appariements)"
 									+ " enregistrés dans\n" + dossier.toAbsolutePath(),
 							"Export terminé", JOptionPane.INFORMATION_MESSAGE);
 				} catch (Exception e) {

@@ -42,7 +42,7 @@ Ce document est à mettre à jour à chaque étape codée.
 
 **Partie C — Aligner les deux visites**
 
-13. [Appariement des bifurcations](#13-appariement-des-bifurcations--point-2) 🔨
+13. [Appariement des bifurcations](#13-appariement-des-bifurcations--codé) ✅
 14. [Estimation de la transformation (RANSAC)](#14-estimation-de-la-transformation-ransac--point-3) 📅
 15. [Image recalée (interpolation bilinéaire)](#15-image-recalée-interpolation-bilinéaire--point-3) 📅
 
@@ -982,9 +982,9 @@ tests passent.
 
 # Partie C — Aligner les deux visites
 
-## 13. Appariement des bifurcations 🔨 Point 2
+## 13. Appariement des bifurcations ✅ Codé
 
-**Classe prévue :** `appariement/ApparieurCorrelation` (Elnis)
+**Classe :** `appariement/ApparieurCorrelation` (codée le 07/11 ; tâche d'Elnis dans le plan)
 **Entrée :** descripteurs des deux visites · **Sortie :** liste de couples `(bifurcation visite 1, bifurcation visite 2, score)`
 
 ### 13.1 Le score : coefficient de corrélation
@@ -1028,7 +1028,54 @@ limité sera essayé au Point 3.
 ### 13.5 Objectif et sortie
 
 **Objectif :** au moins 70 % des paires S avec **au moins 6 bonnes correspondances**.
-Sortie : `appariements/<paire>.csv` avec `x_ref, y_ref, x_suivi, y_suivi, score`.
+Sortie : `appariements/<paire>.csv` avec `x_ref, y_ref, x_suivi, y_suivi, score`
+(`ApparieurCorrelation.ecrireCsv`), aussi écrit par l'export du visualiseur.
+
+Paramètre : `appariement.seuil`, **0,90 provisoire** en attendant l'EER du binôme B.
+
+### 13.6 Tests (11, tous verts)
+
+Corrélation sur des cas connus (identique, 2a + 3, opposé, constant) ; chaque point retrouve
+son correspondant malgré un changement d'ordre, de niveau et un peu de bruit ; choix mutuel
+(deux points qui préfèrent le même ne donnent qu'un couple) ; seuil ; descripteur constant
+ignoré ; tri par score ; listes vides ; longueurs différentes et seuil hors bornes refusés ;
+format CSV.
+
+### 13.7 Mesuré sur FIRE (07/11/2026) ✅ objectif atteint sur S
+
+Sur les **34 paires de réglage proposées** (premier quart de chaque catégorie : A01–A04,
+P01–P12, S01–S18 ; les 100 autres ne sont pas touchées, découpage à valider en groupe). Un
+couple est **juste** si la transformation affine ajustée sur les 10 points de contrôle de
+FIRE envoie le point de la visite 1 à 10 px ou moins de son partenaire (la règle GM de la
+section 17.3).
+
+| Catégorie | R | Seuil | Couples par paire | Justes | Précision | Paires avec ≥ 6 justes |
+| --- | --- | --- | --- | --- | --- | --- |
+| **S** | 48 | 0,90 | 107 | 68 | 63 % | **18 / 18** |
+| S | 48 | 0,98 | 62 | 44 | 71 % | 18 / 18 |
+| S | 64 | 0,90 | 110 | 75 | 68 % | 18 / 18 |
+| S | 64 | 0,98 | 59 | 46 | 78 % | 18 / 18 |
+| P | 48 | 0,90 | 91 | 12 | 13 % | 7 / 12 |
+| A | 48 | 0,90 | 95 | 9 | 9 % | 1 / 4 |
+
+**Lecture :**
+
+- **Paires S : objectif atteint**, et largement : toutes ont au moins 6 bons couples (en
+  moyenne 68), avec environ 2 couples justes sur 3. RANSAC (Point 3) n'aura qu'à écarter le
+  tiers restant.
+- **Paires P et A : chiffres à ne pas interpréter tels quels.** L'affine ajustée sur leurs
+  propres points de contrôle laisse 11 à 43 px d'erreur (P) et jusqu'à 28 px (A02) : sur ces
+  paires à fort déplacement, la courbure de l'œil rend l'affine insuffisante, et le
+  protocole les exclut (erreur > 10 px). S01 et S03 sont aussi juste au-dessus (10,6 et
+  10,9 px). Le binôme B devra trancher : transformation plus riche (quadratique) pour la
+  vérité terrain, ou exclusion comptée.
+- **Le seuil 0,90 trie peu** (la plupart des couples mutuels ont un score plus haut) ; 0,98
+  améliore la précision mais divise les couples par deux. La valeur viendra de l'EER.
+- **R = 64 fait un peu mieux que 48** sur S (75 justes au lieu de 68). À confirmer avec les
+  mesures GM/IM avant de changer le défaut.
+
+Dans le visualiseur : étape « Appariement des deux visites », les deux images côte à côte et
+un trait par couple ; sur une paire S, les bons couples donnent des traits parallèles.
 
 ---
 
@@ -1336,7 +1383,7 @@ dont l'erreur maximale reste sous T), avec la marge d'erreur.
 | Bifurcations ✅ | `bifurcations.distanceCroisement` | 8 | px FIRE | fusionne deux bifurcations en croisement | moyenne |
 | Zernike ✅ | `zernike.ordre` | 4 (puis 8) | — | finesse du descripteur | moyenne |
 | Zernike ✅ | `zernike.rayon` | 48 (32 / 48 / 64 à comparer) | px FIRE | taille de la fenêtre ; aussi la marge au bord des bifurcations | **forte** |
-| Appariement 🔨 | seuil de score | à l'EER | corrélation | accepte ou rejette un couple | **forte** |
+| Appariement ✅ | `appariement.seuil` | 0,90 (provisoire, puis l'EER) | corrélation | accepte ou rejette un couple | **forte** |
 | RANSAC 📅 | seuil d'accord | *5–10* | px | tolérance d'un inlier | forte |
 | RANSAC 📅 | nombre d'essais | *1000* | — | sûreté du vote | faible |
 | Détection 📅 | σ du LoG | ≈ 0,35 × D | px | taille des taches cherchées | forte |

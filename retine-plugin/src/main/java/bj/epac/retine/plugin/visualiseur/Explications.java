@@ -151,6 +151,18 @@ final class Explications {
 					+ "dans 66 % des cas avec R = 32, 86 % avec R = 48, 95 % avec R = 64.\n\n"
 					+ "Paramètres : rayon R, ordre.";
 		}
+		if (VisualiseurChaine.APPARIEMENT.equals(nom)) {
+			return "Visite 1 à gauche, visite 2 à droite (demi-résolution). Chaque trait relie deux bifurcations "
+					+ "appariées ; vert = score élevé, orange = proche du seuil.\n\n"
+					+ "Score : coefficient de corrélation entre les deux descripteurs de Zernike (1 = mêmes formes). "
+					+ "Un couple n'est gardé que si chacun est le meilleur choix de l'autre (choix mutuel), et si le "
+					+ "score dépasse le seuil.\n\n"
+					+ "À regarder : sur une paire S (fort recouvrement), les traits doivent être presque parallèles "
+					+ "(même déplacement partout). Un trait qui part dans une autre direction est un faux couple ; "
+					+ "RANSAC (Point 3) les écartera.\n\n"
+					+ "Paramètre : seuil (0,90, provisoire : la valeur définitive viendra de l'EER mesurée par le "
+					+ "binôme B).";
+		}
 		return "";
 	}
 }
